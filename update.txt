@@ -1,0 +1,3 @@
+git add .
+git commit -m "update: Cap nhat giao dien va tinh nang moi"
+git push origin main

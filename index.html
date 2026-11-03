@@ -24,14 +24,14 @@
   <script>
     // --- BỘ NHỚ LƯU TRỮ CỤC BỘ SAFE-STORAGE ---
     const STORAGE = {
-      stores: 'foodgo_v4_stores',
-      foods: 'foodgo_v4_foods',
-      cart: 'foodgo_v4_cart',
-      orders: 'foodgo_v4_orders',
-      favorites: 'foodgo_v4_favorites',
-      profile: 'foodgo_v4_profile',
-      area: 'foodgo_v4_area',
-      shipping: 'foodgo_v4_shipping_fee'
+      stores: 'foodgo_v5_stores',
+      foods: 'foodgo_v5_foods',
+      cart: 'foodgo_v5_cart',
+      orders: 'foodgo_v5_orders',
+      favorites: 'foodgo_v5_favorites',
+      profile: 'foodgo_v5_profile',
+      area: 'foodgo_v5_area',
+      shipping: 'foodgo_v5_shipping_fee'
     };
 
     const TRABONG_HAMLETS = [
@@ -50,15 +50,9 @@
       { id: 'tb_taytra', name: 'Xã Tây Trà', district: 'Trà Bồng', lat: 15.2200, lng: 108.2800 }
     ];
 
-    const INITIAL_STORES = [
-      { id: 's1', name: 'Quán Ẩm Thực Quế Trà Bồng', category: 'Đặc sản địa phương', address: 'Thôn 1 (Trung tâm xã)', areaId: 'tb_trabong', image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80', isOpen: true, prepTime: '15-20 phút', phone: '0987654321' },
-      { id: 's2', name: 'Trà Sữa & Ăn Vặt Đông Trà Bồng', category: 'Trà sữa - Ăn vặt', address: 'Xã Đông Trà Bồng', areaId: 'tb_dongtrabong', image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=700&q=80', isOpen: true, prepTime: '10-15 phút', phone: '0912345678' }
-    ];
-
-    const INITIAL_FOODS = [
-      { id: 'f1', storeId: 's1', name: 'Pizza Hải Sản Pesto Xanh', price: 185000, category: 'Món ăn', description: 'Bánh pizza sốt pesto xanh kết hợp hải sản thơm ngon.', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=700&q=80', inStock: true, isPopular: true },
-      { id: 'f2', storeId: 's1', name: 'Cơm Gà Xé Phay Trà Bồng', price: 45000, category: 'Cơm - Món chính', description: 'Cơm gà xé phay đậm đà rau thơm địa phương.', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=700&q=80', inStock: true, isPopular: true }
-    ];
+    // XÓA SẠCH DỮ LIỆU DEMO: Khởi tạo danh sách cửa hàng và món ăn rỗng hoàn toàn để người dùng tự nhập thực tế
+    const INITIAL_STORES = [];
+    const INITIAL_FOODS = [];
 
     function readStorage(key, fallback) {
       try {
@@ -84,7 +78,7 @@
       profile: readStorage(STORAGE.profile, { name: '', phone: '', hamlet: TRABONG_HAMLETS[0], addressDetail: '' }),
       shippingFee: readStorage(STORAGE.shipping, 15000),
       serviceFee: 0,
-      merchantStoreId: INITIAL_STORES[0].id,
+      merchantStoreId: '',
       searchQuery: '',
       selectedCategory: 'Tất cả',
       selectedStoreId: 'all',
@@ -109,7 +103,8 @@
       toast: '',
       shippingInput: '15000',
       audioEnabled: false,
-      showMap: false // TRẠNG THÁI THU GỌN / MỞ RỘNG BẢN ĐỒ
+      showMap: false,
+      isListening: false // Trạng thái nhận diện giọng nói
     };
 
     let mapInstance = null;
@@ -139,6 +134,53 @@
       state.toast = msg;
       render();
       setTimeout(() => { if (state.toast === msg) { state.toast = ''; render(); } }, 3500);
+    }
+
+    // TÍNH NĂNG TÌM KIẾM VÀ ĐẶT MÓN BẰNG GIỌNG NÓI (VOICE SEARCH & ORDER)
+    function startVoiceRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        showToast('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói (Voice Search). Hãy dùng Google Chrome!');
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'vi-VN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      state.isListening = true;
+      showToast('🎙️ Đang nghe... Hãy nói tên món ăn bạn muốn tìm!');
+      render();
+
+      recognition.onresult = function(event) {
+        const speechResult = event.results[0][0].transcript;
+        state.isListening = false;
+        state.searchQuery = speechResult.trim();
+        state.activeTab = 'explore';
+        showToast(`🎙️ Đã nhận diện: "${speechResult}"`);
+        render();
+      };
+
+      recognition.onerror = function(event) {
+        state.isListening = false;
+        showToast('Không nhận diện được giọng nói. Vui lòng thử lại.');
+        render();
+      };
+
+      recognition.onend = function() {
+        if (state.isListening) {
+          state.isListening = false;
+          render();
+        }
+      };
+
+      try {
+        recognition.start();
+      } catch (e) {
+        state.isListening = false;
+        render();
+      }
     }
 
     function enableAudioAlert() {
@@ -189,7 +231,6 @@
       return 'bg-sky-100 text-sky-800 border-sky-300';
     }
 
-    // ACTIONS
     function setRole(r) { state.role = r; state.activeTab = 'home'; render(); }
     function setTab(t) { state.activeTab = t; render(); }
     function setArea(id) { state.selectedAreaId = id; state.selectedStoreId = 'all'; saveState(); render(); }
@@ -300,7 +341,7 @@
         items: [...state.cart],
         subtotal,
         shippingFee: state.shippingFee,
-        serviceFee: 0, // MIỄN PHÍ DỊCH VỤ
+        serviceFee: 0,
         total: subtotal + state.shippingFee,
         status: 'PENDING_CONFIRMATION',
         customerName: name,
@@ -398,6 +439,11 @@
         showToast('Vui lòng nhập tên món và giá bán hợp lệ.');
         return;
       }
+      if (!state.merchantStoreId) {
+        showToast('Vui lòng tạo hoặc chọn cửa hàng trước khi thêm món.');
+        return;
+      }
+
       if (state.editingFoodId) {
         state.foods = state.foods.map(f => f.id === state.editingFoodId ? { ...f, name, price: Math.round(price), category, description: desc, image: customImage } : f);
         showToast('Đã cập nhật món ăn.');
@@ -412,14 +458,13 @@
           inStock: true
         };
         state.foods.unshift(newFood);
-        showToast('Đã thêm món mới tùy ý thành công.');
+        showToast('Đã thêm món mới tuỳ ý thành công.');
       }
       state.showFoodForm = false;
       saveState();
       render();
     }
 
-    // KHỞI TẠO BẢN ĐỒ LEAFLET TRỰC TUYẾN TRÊN TRANG CHỦ
     function initMap(lat, lng) {
       const mapContainer = document.getElementById('map');
       if (!mapContainer) return;
@@ -434,7 +479,6 @@
           attribution: '© OpenStreetMap contributors'
         }).addTo(mapInstance);
         
-        // Thêm marker cho các cửa hàng trong khu vực
         state.stores.forEach(store => {
           L.marker([lat + (Math.random()*0.02 - 0.01), lng + (Math.random()*0.02 - 0.01)]).addTo(mapInstance)
             .bindPopup(`<b>${store.name}</b><br>${store.address}`);
@@ -458,7 +502,7 @@
                   <svg class="w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : 'text-gray-300'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                 </button>
               </div>
-              <p class="text-[11px] text-gray-500 line-clamp-2 mt-1">${food.description || 'Đặc sản ngon hấp dẫn'}</p>
+              <p class="text-[11px] text-gray-500 line-clamp-2 mt-1">${food.description || 'Món ngon thực tế'}</p>
               <p class="text-[10px] text-gray-400 mt-1 truncate">${store ? store.name : 'Cửa hàng'}</p>
             </div>
             <div class="flex items-center justify-between gap-2 mt-2">
@@ -550,9 +594,12 @@
       const cartSubtotal = state.cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
       const cartCount = state.cart.reduce((s, i) => s + i.quantity, 0);
       const effectiveShipping = state.cart.length ? state.shippingFee : 0;
-      const checkoutTotal = cartSubtotal + effectiveShipping; // KHÔNG CỘNG PHÍ DỊCH VỤ
+      const checkoutTotal = cartSubtotal + effectiveShipping;
 
-      const currentMerchantStore = state.stores.find(s => s.id === state.merchantStoreId) || state.stores[0];
+      if (!state.merchantStoreId && state.stores.length > 0) {
+        state.merchantStoreId = state.stores[0].id;
+      }
+      const currentMerchantStore = state.stores.find(s => s.id === state.merchantStoreId);
       const currentMerchantFoods = state.foods.filter(f => f.storeId === currentMerchantStore?.id);
       const merchantOrders = state.orders.filter(o => o.storeId === state.merchantStoreId).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
       const buyerOrders = [...state.orders].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
@@ -585,10 +632,16 @@
               </select>
             </div>
             ${state.role === 'buyer' ? `
-              <div class="relative">
-                <input value="${state.searchQuery}" oninput="state.searchQuery = this.value; if(this.value) state.activeTab='explore'; render();" placeholder="Tìm món ăn, đồ uống, đặc sản Trà Bồng..." class="w-full rounded-xl bg-white text-gray-900 pl-9 pr-8 py-2.5 text-xs outline-none placeholder:text-gray-400 shadow-inner" />
-                <svg class="absolute left-3 top-3 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" class="absolute right-2 top-2 p-1 text-gray-400">✕</button>` : ''}
+              <div class="flex gap-2">
+                <div class="relative flex-1">
+                  <input value="${state.searchQuery}" oninput="state.searchQuery = this.value; if(this.value) state.activeTab='explore'; render();" placeholder="Tìm món ăn, đặc sản Trà Bồng..." class="w-full rounded-xl bg-white text-gray-900 pl-9 pr-8 py-2.5 text-xs outline-none placeholder:text-gray-400 shadow-inner" />
+                  <svg class="absolute left-3 top-3 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" class="absolute right-2 top-2 p-1 text-gray-400">✕</button>` : ''}
+                </div>
+                <!-- NÚT TÌM KIẾM BẰNG GIỌNG NÓI (VOICE SEARCH) -->
+                <button onclick="startVoiceRecognition()" title="Tìm món bằng giọng nói" class="bg-amber-400 hover:bg-amber-500 text-emerald-950 px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1 shadow-sm shrink-0">
+                  🎙️ ${state.isListening ? 'Đang nghe...' : 'Nói'}
+                </button>
               </div>
             ` : ''}
           </div>
@@ -605,12 +658,15 @@
               <div class="relative z-10">
                 <span class="inline-flex bg-amber-400 text-emerald-950 text-[9px] px-2 py-0.5 rounded-full font-extrabold">0Đ PHÍ DỊCH VỤ</span>
                 <h2 class="text-lg font-extrabold mt-1.5 leading-snug">Ẩm thực & Nông sản Trà Bồng</h2>
-                <p class="text-[11px] text-emerald-100 mt-1">Kết nối trực tiếp khách hàng và chủ quán địa phương</p>
-                <button onclick="setTab('explore')" class="mt-3 bg-white text-emerald-800 rounded-xl px-3 py-2 text-xs font-extrabold shadow-sm">Khám phá thực đơn →</button>
+                <p class="text-[11px] text-emerald-100 mt-1">Hệ thống gọi món trực tiếp từ các quán tự do tại địa phương</p>
+                <div class="flex gap-2 mt-3">
+                  <button onclick="setTab('explore')" class="bg-white text-emerald-800 rounded-xl px-3 py-2 text-xs font-extrabold shadow-sm">Khám phá thực đơn →</button>
+                  <button onclick="startVoiceRecognition()" class="bg-amber-400 text-emerald-950 rounded-xl px-3 py-2 text-xs font-extrabold shadow-sm flex items-center gap-1">🎙️ Đặt món bằng giọng nói</button>
+                </div>
               </div>
             </section>
 
-            <!-- BẢN ĐỒ THU GỌN - BẤM ĐỂ MỞ RỘNG KHI CẦN -->
+            <!-- BẢN ĐỒ THU GỌN -->
             <section class="bg-white rounded-2xl border border-gray-100 p-3 shadow-sm space-y-2">
               <button onclick="state.showMap = !state.showMap; render();" class="w-full flex items-center justify-between text-xs font-bold text-gray-800 py-1">
                 <span class="flex items-center gap-1.5">🗺️ Xem bản đồ trực tuyến khu vực ${selectedArea.name}</span>
@@ -620,8 +676,14 @@
             </section>
 
             <section class="space-y-2">
-              <div class="flex justify-between items-center"><h3 class="font-extrabold text-sm text-gray-800">Cửa hàng đang mở tại ${selectedArea.name}</h3><button onclick="setTab('explore')" class="text-xs text-emerald-700 font-bold">Xem món</button></div>
-              ${areaStores.length === 0 ? `<p class="text-xs text-gray-400 py-4 text-center">Chưa có cửa hàng trong khu vực này.</p>` : `
+              <div class="flex justify-between items-center"><h3 class="font-extrabold text-sm text-gray-800">Cửa hàng thực tế tại ${selectedArea.name}</h3></div>
+              ${areaStores.length === 0 ? `
+                <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center space-y-2">
+                  <p class="font-bold text-xs text-gray-800">Chưa có cửa hàng nào được tạo.</p>
+                  <p class="text-[10px] text-gray-500">Hãy chuyển sang chế độ <b class="text-emerald-700">Chủ quán</b> để tự tạo tên quán và nhập thực đơn thực tế!</p>
+                  <button onclick="setRole('merchant')" class="mt-2 bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Tạo quán ngay</button>
+                </div>
+              ` : `
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   ${areaStores.map(store => `
                     <button type="button" onclick="state.selectedStoreId='${store.id}'; setTab('explore');" class="text-left bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
@@ -637,9 +699,9 @@
             </section>
 
             <section class="space-y-2">
-              <div class="flex items-center justify-between"><h3 class="font-extrabold text-sm text-gray-800">Món nổi bật</h3><button onclick="setTab('explore')" class="text-xs text-emerald-700 font-bold">Tất cả</button></div>
+              <div class="flex items-center justify-between"><h3 class="font-extrabold text-sm text-gray-800">Thực đơn thực tế</h3><button onclick="setTab('explore')" class="text-xs text-emerald-700 font-bold">Xem tất cả</button></div>
               <div class="space-y-3">
-                ${visibleFoods.filter(f => f.isPopular).slice(0, 4).map(renderFoodCard).join('')}
+                ${visibleFoods.length ? visibleFoods.slice(0, 4).map(renderFoodCard).join('') : `<p class="text-xs text-gray-400 text-center py-4">Chưa có món ăn nào được đăng bán.</p>`}
               </div>
             </section>
           `;
@@ -648,7 +710,7 @@
         if (state.activeTab === 'explore') {
           html += `
             <div class="flex justify-between items-center gap-2">
-              <div><h2 class="font-extrabold text-base">Thực đơn</h2><p class="text-[10px] text-gray-500 mt-0.5">${selectedArea.name} · ${visibleFoods.length} món phù hợp</p></div>
+              <div><h2 class="font-extrabold text-base">Thực đơn thực tế</h2><p class="text-[10px] text-gray-500 mt-0.5">${selectedArea.name} · ${visibleFoods.length} món</p></div>
               <button onclick="state.searchQuery=''; state.selectedCategory='Tất cả'; state.selectedStoreId='all'; render();" class="text-xs text-emerald-700 font-bold">Đặt lại lọc</button>
             </div>
             <div class="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
@@ -659,7 +721,7 @@
               ${areaStores.map(s => `<option value="${s.id}" ${state.selectedStoreId === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
             </select>
             <div class="space-y-3">
-              ${visibleFoods.length ? visibleFoods.map(renderFoodCard).join('') : `<p class="text-xs text-gray-400 py-8 text-center">Không tìm thấy món phù hợp.</p>`}
+              ${visibleFoods.length ? visibleFoods.map(renderFoodCard).join('') : `<p class="text-xs text-gray-400 py-8 text-center">Không tìm thấy món ăn phù hợp.</p>`}
             </div>
           `;
         }
@@ -730,7 +792,7 @@
         `;
       }
 
-      // 2. CHỦ QUÁN (MERCHANT) - TỰ DO TẠO QUÁN VÀ THÊM MÓN KHÔNG RÀNG BUỘC
+      // 2. CHỦ QUÁN (MERCHANT)
       if (state.role === 'merchant') {
         const pendingCount = merchantOrders.filter(o => o.status === 'PENDING_CONFIRMATION').length;
         const currentMonthSales = merchantOrders.filter(o => o.status === 'COMPLETED').reduce((s, o) => s + o.subtotal, 0);
@@ -741,16 +803,18 @@
               <div class="flex justify-between gap-3 items-start">
                 <div class="flex-1 min-w-0">
                   <p class="text-[10px] text-emerald-200">QUẢN LÝ GIAN HÀNG CÁ NHÂN</p>
-                  <h2 class="font-extrabold text-base mt-1">${currentMerchantStore ? currentMerchantStore.name : 'Cửa hàng'}</h2>
-                  <p class="text-[10px] text-emerald-100 mt-0.5">Địa chỉ: ${currentMerchantStore?.address || ''} · SĐT: ${currentMerchantStore?.phone || ''}</p>
+                  <h2 class="font-extrabold text-base mt-1">${currentMerchantStore ? currentMerchantStore.name : 'Chưa chọn cửa hàng'}</h2>
+                  <p class="text-[10px] text-emerald-100 mt-0.5">${currentMerchantStore ? `Địa chỉ: ${currentMerchantStore.address} · SĐT: ${currentMerchantStore.phone}` : 'Vui lòng bấm nút bên dưới để tạo quán mới'}</p>
                 </div>
               </div>
-              <div class="mt-3">
-                <label class="text-[10px] text-emerald-100 font-semibold">Chọn cửa hàng quản lý:</label>
-                <select onchange="state.merchantStoreId = this.value; render();" class="mt-1 w-full rounded-lg bg-emerald-950/70 border border-emerald-600 text-white px-2 py-2 text-xs outline-none">
-                  ${state.stores.map(s => `<option value="${s.id}" class="text-gray-900" ${s.id === state.merchantStoreId ? 'selected' : ''}>${s.name} (${s.address})</option>`).join('')}
-                </select>
-              </div>
+              ${state.stores.length > 0 ? `
+                <div class="mt-3">
+                  <label class="text-[10px] text-emerald-100 font-semibold">Chọn cửa hàng quản lý:</label>
+                  <select onchange="state.merchantStoreId = this.value; render();" class="mt-1 w-full rounded-lg bg-emerald-950/70 border border-emerald-600 text-white px-2 py-2 text-xs outline-none">
+                    ${state.stores.map(s => `<option value="${s.id}" class="text-gray-900" ${s.id === state.merchantStoreId ? 'selected' : ''}>${s.name} (${s.address})</option>`).join('')}
+                  </select>
+                </div>
+              ` : ''}
 
               <div class="mt-3 pt-3 border-t border-emerald-800 flex items-center justify-between">
                 <div>
@@ -769,7 +833,7 @@
             </div>
 
             <div class="flex items-center justify-between">
-              <h3 class="font-extrabold text-sm">Đăng ký thêm Quán mới</h3>
+              <h3 class="font-extrabold text-sm">Đăng ký Quán mới</h3>
               <button onclick="state.showStoreForm = true; render();" class="bg-amber-400 text-emerald-950 px-3 py-2 rounded-xl text-xs font-bold shadow-sm">
                 + Tự tạo tên quán tuỳ ý
               </button>
@@ -784,15 +848,17 @@
 
             <section class="space-y-3">
               <h3 class="font-extrabold text-sm">Đơn hàng cần xử lý</h3>
-              ${merchantOrders.length ? merchantOrders.map(o => renderOrderCard(o, true)).join('') : `<p class="text-xs text-gray-400 py-8 text-center">Chưa có đơn hàng nào.</p>`}
+              ${merchantOrders.length ? merchantOrders.map(o => renderOrderCard(o, true)).join('') : `<p class="text-xs text-gray-400 py-6 text-center">Chưa có đơn hàng nào.</p>`}
             </section>
 
             <section class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm">
               <div class="flex items-center justify-between">
                 <div><h3 class="font-extrabold text-sm">Thực đơn tự do của quán</h3></div>
-                <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', description:'', image:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món tuỳ ý</button>
+                ${currentMerchantStore ? `
+                  <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', description:'', image:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món tuỳ ý</button>
+                ` : ''}
               </div>
-              ${currentMerchantFoods.map(food => `
+              ${!currentMerchantStore ? `<p class="text-xs text-gray-400 py-4 text-center">Vui lòng tạo cửa hàng trước khi thêm món.</p>` : currentMerchantFoods.length === 0 ? `<p class="text-xs text-gray-400 py-4 text-center">Chưa có món ăn nào trong quán.</p>` : currentMerchantFoods.map(food => `
                 <div class="flex items-center gap-2 border-t border-gray-100 pt-2">
                   <img src="${food.image}" alt="${food.name}" class="w-12 h-12 rounded-lg object-cover" onerror="this.src='https://placehold.co/200x200/059669/ffffff?text=FoodGo';" />
                   <div class="flex-1 min-w-0">
@@ -828,7 +894,7 @@
             <section class="bg-white rounded-2xl border p-3 space-y-3 shadow-sm">
               <h3 class="font-extrabold text-sm text-gray-900 border-b pb-2">Danh sách tất cả cửa hàng & Doanh thu tháng hiện tại</h3>
               <div class="space-y-3">
-                ${state.stores.map(store => {
+                ${state.stores.length === 0 ? `<p class="text-xs text-gray-400 py-4 text-center">Chưa có cửa hàng nào đăng ký trên hệ thống.</p>` : state.stores.map(store => {
                   const storeOrders = state.orders.filter(o => o.storeId === store.id && o.status === 'COMPLETED');
                   const storeRevenue = storeOrders.reduce((s, o) => s + o.subtotal, 0);
                   const storeTotalOrders = state.orders.filter(o => o.storeId === store.id).length;
@@ -848,14 +914,6 @@
                     </div>
                   `;
                 }).join('')}
-              </div>
-            </section>
-
-            <section class="bg-white rounded-2xl border p-3 space-y-3 shadow-sm">
-              <h3 class="font-extrabold text-sm">Cấu hình phí giao hàng toàn hệ thống</h3>
-              <div class="flex gap-2">
-                <input type="number" min="0" value="${state.shippingInput}" oninput="state.shippingInput=this.value;" class="field flex-1" />
-                <button onclick="saveShippingFee()" class="px-4 rounded-xl bg-emerald-700 text-white text-xs font-bold">Lưu phí</button>
               </div>
             </section>
           </main>
@@ -993,14 +1051,13 @@
         `;
       }
 
-      // MODAL ĐĂNG KÝ QUÁN MỚI TÙY Ý
       if (state.showStoreForm) {
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
             <div class="bg-white w-full max-w-md rounded-2xl p-4 shadow-2xl">
               <h3 class="font-extrabold text-base pb-2 border-b">Đăng ký Cửa hàng Mới (Tuỳ ý)</h3>
               <form onsubmit="createNewStore(event)" class="space-y-3 mt-3">
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên cửa hàng / Quán ăn *</span><input oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="Ví dụ: Quán Bánh Xèo Miền Quê" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên cửa hàng / Quán ăn *</span><input oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="Ví dụ: Quán Cơm Gà Trà Bồng" /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục</span>
                   <select onchange="state.newStoreForm.category=this.value;" class="field">
                     <option>Đặc sản địa phương</option><option>Cơm - Món chính</option><option>Trà sữa - Ăn vặt</option><option>Chợ nông sản</option>
@@ -1018,14 +1075,13 @@
         `;
       }
 
-      // MODAL THÊM MÓN TÙY Ý KHÔNG RÀNG BUỘC
       if (state.showFoodForm) {
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
             <div class="bg-white w-full max-w-md rounded-2xl p-4 shadow-2xl">
               <h3 class="font-extrabold text-base pb-2 border-b">Thêm món mới tuỳ ý</h3>
               <div class="space-y-3 mt-3">
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên món ăn *</span><input value="${state.foodForm.name}" oninput="state.foodForm.name=this.value;" class="field" placeholder="Ví dụ: Gà đèo Măng Đen nướng" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên món ăn *</span><input value="${state.foodForm.name}" oninput="state.foodForm.name=this.value;" class="field" placeholder="Ví dụ: Gà nướng muối ớt" /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Giá bán (VNĐ) *</span><input type="number" min="0" value="${state.foodForm.price}" oninput="state.foodForm.price=this.value;" class="field" placeholder="Ví dụ: 50000" /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục</span>
                   <select onchange="state.foodForm.category=this.value;" class="field">
@@ -1056,7 +1112,6 @@
 
       app.innerHTML = html;
 
-      // Khởi tạo bản đồ nếu đang mở
       if (state.role === 'buyer' && state.activeTab === 'home' && state.showMap) {
         setTimeout(() => initMap(selectedArea.lat, selectedArea.lng), 100);
       }
