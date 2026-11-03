@@ -5,30 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>FoodGo Local - Đặc Sản & Ẩm Thực Trà Bồng</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Nhúng Leaflet CSS cho Bản đồ trực tuyến -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
     .field { width: 100%; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px 12px; font-size: 13px; color: #111827; background: #fff; outline: none; transition: all 0.2s; }
     .field:focus { border-color: #059669; box-shadow: 0 0 0 3px rgba(5,150,105,.15); }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    @keyframes pulse-ring { 0% { transform: scale(0.95); opacity: 0.8; } 50% { transform: scale(1.05); opacity: 1; } 100% { transform: scale(0.95); opacity: 0.8; } }
-    .pulse-ring { animation: pulse-ring 2s infinite ease-in-out; }
+    #map { height: 180px; width: 100%; border-radius: 1rem; z-index: 10; }
   </style>
 </head>
 <body class="bg-slate-100 min-h-screen">
   <div id="app" class="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative pb-24 border-x border-gray-200"></div>
 
+  <!-- Leaflet JS cho Bản đồ -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // --- BỘ NHỚ LƯU TRỮ CỤC BỘ SAFE-STORAGE ---
     const STORAGE = {
-      stores: 'foodgo_v3_stores',
-      foods: 'foodgo_v3_foods',
-      cart: 'foodgo_v3_cart',
-      orders: 'foodgo_v3_orders',
-      favorites: 'foodgo_v3_favorites',
-      profile: 'foodgo_v3_profile',
-      area: 'foodgo_v3_area',
-      shipping: 'foodgo_v3_shipping_fee'
+      stores: 'foodgo_v4_stores',
+      foods: 'foodgo_v4_foods',
+      cart: 'foodgo_v4_cart',
+      orders: 'foodgo_v4_orders',
+      favorites: 'foodgo_v4_favorites',
+      profile: 'foodgo_v4_profile',
+      area: 'foodgo_v4_area',
+      shipping: 'foodgo_v4_shipping_fee'
     };
 
     const TRABONG_HAMLETS = [
@@ -40,24 +43,21 @@
     ];
 
     const ADMINISTRATIVE_LOCATIONS = [
-      { id: 'tb_trabong', name: 'Xã Trà Bồng', district: 'Trà Bồng' },
-      { id: 'tb_dongtrabong', name: 'Xã Đông Trà Bồng', district: 'Trà Bồng' },
-      { id: 'tb_thanhbong', name: 'Xã Thanh Bồng', district: 'Trà Bồng' },
-      { id: 'tb_taytrabong', name: 'Xã Tây Trà Bồng', district: 'Trà Bồng' },
-      { id: 'tb_taytra', name: 'Xã Tây Trà', district: 'Trà Bồng' }
+      { id: 'tb_trabong', name: 'Xã Trà Bồng', district: 'Trà Bồng', lat: 15.1583, lng: 108.3833 },
+      { id: 'tb_dongtrabong', name: 'Xã Đông Trà Bồng', district: 'Trà Bồng', lat: 15.1700, lng: 108.4200 },
+      { id: 'tb_thanhbong', name: 'Xã Thanh Bồng', district: 'Trà Bồng', lat: 15.1300, lng: 108.3500 },
+      { id: 'tb_taytrabong', name: 'Xã Tây Trà Bồng', district: 'Trà Bồng', lat: 15.1900, lng: 108.3100 },
+      { id: 'tb_taytra', name: 'Xã Tây Trà', district: 'Trà Bồng', lat: 15.2200, lng: 108.2800 }
     ];
 
     const INITIAL_STORES = [
       { id: 's1', name: 'Quán Ẩm Thực Quế Trà Bồng', category: 'Đặc sản địa phương', address: 'Thôn 1 (Trung tâm xã)', areaId: 'tb_trabong', image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80', isOpen: true, prepTime: '15-20 phút', phone: '0987654321' },
-      { id: 's2', name: 'Trà Sữa & Ăn Vặt Đông Trà Bồng', category: 'Trà sữa - Ăn vặt', address: 'Xã Đông Trà Bồng', areaId: 'tb_dongtrabong', image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=700&q=80', isOpen: true, prepTime: '10-15 phút', phone: '0912345678' },
-      { id: 's3', name: 'Nông Sản Tươi Tây Trà Bồng', category: 'Chợ nông sản', address: 'Xã Tây Trà Bồng', areaId: 'tb_taytrabong', image: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=700&q=80', isOpen: true, prepTime: 'Giao trong ngày', phone: '0909090909' }
+      { id: 's2', name: 'Trà Sữa & Ăn Vặt Đông Trà Bồng', category: 'Trà sữa - Ăn vặt', address: 'Xã Đông Trà Bồng', areaId: 'tb_dongtrabong', image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=700&q=80', isOpen: true, prepTime: '10-15 phút', phone: '0912345678' }
     ];
 
     const INITIAL_FOODS = [
-      { id: 'f1', storeId: 's1', name: 'Pizza Hải Sản Pesto Xanh', price: 185000, category: 'Món ăn', description: 'Bánh pizza sốt pesto xanh kết hợp hải sản và phô mai thơm ngon.', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=700&q=80', inStock: true, isPopular: true, variants: [{ id: 'medium', label: 'Vừa (Size M)', priceDelta: 0 }, { id: 'large', label: 'Lớn (Size L)', priceDelta: 30000 }] },
-      { id: 'f2', storeId: 's1', name: 'Cơm Gà Xé Phay Trà Bồng', price: 45000, category: 'Cơm - Món chính', description: 'Cơm gà xé phay đậm đà với rau thơm địa phương.', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=700&q=80', inStock: true, isPopular: true },
-      { id: 'f3', storeId: 's2', name: 'Trà Sữa Trân Châu Đường Đen', price: 25000, category: 'Đồ uống', description: 'Trà sữa đậm đà kèm trân châu đường đen dẻo thơm.', image: 'https://images.unsplash.com/photo-1558857563-b371033873b8?w=700&q=80', inStock: true, isPopular: true },
-      { id: 'f4', storeId: 's3', name: 'Rau Củ Tươi Theo Mùa', price: 30000, category: 'Nông sản', description: 'Nông sản sạch hái trong ngày từ các nông hộ Trà Bồng.', image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=700&q=80', inStock: true }
+      { id: 'f1', storeId: 's1', name: 'Pizza Hải Sản Pesto Xanh', price: 185000, category: 'Món ăn', description: 'Bánh pizza sốt pesto xanh kết hợp hải sản thơm ngon.', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=700&q=80', inStock: true, isPopular: true },
+      { id: 'f2', storeId: 's1', name: 'Cơm Gà Xé Phay Trà Bồng', price: 45000, category: 'Cơm - Món chính', description: 'Cơm gà xé phay đậm đà rau thơm địa phương.', image: 'https://images.unsplash.com/photo-1562967914-608f82629710?w=700&q=80', inStock: true, isPopular: true }
     ];
 
     function readStorage(key, fallback) {
@@ -84,7 +84,7 @@
       profile: readStorage(STORAGE.profile, { name: '', phone: '', hamlet: TRABONG_HAMLETS[0], addressDetail: '' }),
       shippingFee: readStorage(STORAGE.shipping, 15000),
       serviceFee: 0,
-      merchantStoreId: 's1',
+      merchantStoreId: INITIAL_STORES[0].id,
       searchQuery: '',
       selectedCategory: 'Tất cả',
       selectedStoreId: 'all',
@@ -97,9 +97,9 @@
       showOrderDetail: null,
       showFoodForm: false,
       editingFoodId: null,
-      foodForm: { name: '', price: '', category: 'Món ăn', description: '' },
+      foodForm: { name: '', price: '', category: 'Món ăn', description: '', image: '' },
       showStoreForm: false,
-      newStoreForm: { name: '', category: 'Đặc sản địa phương', address: TRABONG_HAMLETS[0], phone: '' },
+      newStoreForm: { name: '', category: 'Đặc sản địa phương', address: '', phone: '' },
       checkoutName: '',
       checkoutPhone: '',
       checkoutHamlet: TRABONG_HAMLETS[0],
@@ -108,8 +108,11 @@
       checkoutError: '',
       toast: '',
       shippingInput: '15000',
-      audioEnabled: false
+      audioEnabled: false,
+      showMap: false // TRẠNG THÁI THU GỌN / MỞ RỘNG BẢN ĐỒ
     };
+
+    let mapInstance = null;
 
     function saveState() {
       safeWrite(STORAGE.stores, state.stores);
@@ -138,13 +141,12 @@
       setTimeout(() => { if (state.toast === msg) { state.toast = ''; render(); } }, 3500);
     }
 
-    // HỆ THỐNG ÂM THANH BÁO ĐƠN MỚI
     function enableAudioAlert() {
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         ctx.resume().then(() => {
           state.audioEnabled = true;
-          showToast('🔔 Đã bật âm thanh chuông báo đơn mới thành công!');
+          showToast('🔔 Đã bật âm thanh chuông báo đơn mới!');
           render();
         });
       } catch {
@@ -167,9 +169,7 @@
         gain.connect(ctx.destination);
         osc.start();
         osc.stop(ctx.currentTime + 0.6);
-      } catch (e) {
-        console.log("Audio play blocked");
-      }
+      } catch (e) {}
     }
 
     const STATUS_LABEL = {
@@ -189,7 +189,7 @@
       return 'bg-sky-100 text-sky-800 border-sky-300';
     }
 
-    // ACTIONS THAO TÁC
+    // ACTIONS
     function setRole(r) { state.role = r; state.activeTab = 'home'; render(); }
     function setTab(t) { state.activeTab = t; render(); }
     function setArea(id) { state.selectedAreaId = id; state.selectedStoreId = 'all'; saveState(); render(); }
@@ -300,8 +300,8 @@
         items: [...state.cart],
         subtotal,
         shippingFee: state.shippingFee,
-        serviceFee: state.serviceFee,
-        total: subtotal + state.shippingFee + state.serviceFee,
+        serviceFee: 0, // MIỄN PHÍ DỊCH VỤ
+        total: subtotal + state.shippingFee,
         status: 'PENDING_CONFIRMATION',
         customerName: name,
         customerPhone: phone,
@@ -351,23 +351,26 @@
     function createNewStore(e) {
       e.preventDefault();
       const name = state.newStoreForm.name.trim();
-      if (!name) { showToast('Vui lòng nhập tên cửa hàng.'); return; }
+      const phone = state.newStoreForm.phone.trim();
+      const address = state.newStoreForm.address.trim();
+      if (!name || !phone || !address) { showToast('Vui lòng điền đầy đủ tên quán, SĐT và địa chỉ.'); return; }
+      
       const newId = 's_' + Date.now();
       const newStore = {
         id: newId,
         name,
         category: state.newStoreForm.category,
-        address: `${state.newStoreForm.address}, Xã Trà Bồng`,
+        address,
         areaId: state.selectedAreaId,
         image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80',
         isOpen: true,
         prepTime: '15-20 phút',
-        phone: state.newStoreForm.phone.trim() || '0900000000'
+        phone
       };
       state.stores.push(newStore);
       state.merchantStoreId = newId;
       state.showStoreForm = false;
-      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', address: TRABONG_HAMLETS[0], phone: '' };
+      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', address: '', phone: '' };
       saveState();
       showToast(`Đã tạo thành công cửa hàng "${name}".`);
     }
@@ -387,68 +390,65 @@
     function saveFood() {
       const name = state.foodForm.name.trim();
       const price = Number(state.foodForm.price);
-      if (!name || !Number.isFinite(price) || price <= 0) {
+      const desc = state.foodForm.description.trim();
+      const category = state.foodForm.category;
+      const customImage = state.foodForm.image.trim() || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&q=80';
+
+      if (!name || !Number.isFinite(price) || price < 0) {
         showToast('Vui lòng nhập tên món và giá bán hợp lệ.');
         return;
       }
       if (state.editingFoodId) {
-        state.foods = state.foods.map(f => f.id === state.editingFoodId ? { ...f, name, price: Math.round(price), category: state.foodForm.category, description: state.foodForm.description.trim() } : f);
+        state.foods = state.foods.map(f => f.id === state.editingFoodId ? { ...f, name, price: Math.round(price), category, description: desc, image: customImage } : f);
         showToast('Đã cập nhật món ăn.');
       } else {
         const newFood = {
           id: 'f-' + Date.now(),
           storeId: state.merchantStoreId,
           name, price: Math.round(price),
-          category: state.foodForm.category,
-          description: state.foodForm.description.trim(),
-          image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&q=80',
+          category,
+          description: desc,
+          image: customImage,
           inStock: true
         };
         state.foods.unshift(newFood);
-        showToast('Đã thêm món mới vào thực đơn.');
+        showToast('Đã thêm món mới tùy ý thành công.');
       }
       state.showFoodForm = false;
       saveState();
       render();
     }
 
-    function saveShippingFee() {
-      const val = Number(state.shippingInput);
-      if (!Number.isFinite(val) || val < 0 || val > 500000) {
-        showToast('Phí giao hàng phải từ 0 đến 500.000đ.');
-        return;
+    // KHỞI TẠO BẢN ĐỒ LEAFLET TRỰC TUYẾN TRÊN TRANG CHỦ
+    function initMap(lat, lng) {
+      const mapContainer = document.getElementById('map');
+      if (!mapContainer) return;
+      if (mapInstance) {
+        mapInstance.remove();
+        mapInstance = null;
       }
-      state.shippingFee = Math.round(val);
-      saveState();
-      showToast('Đã cập nhật phí giao hàng.');
+      try {
+        mapInstance = L.map('map').setView([lat, lng], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(mapInstance);
+        
+        // Thêm marker cho các cửa hàng trong khu vực
+        state.stores.forEach(store => {
+          L.marker([lat + (Math.random()*0.02 - 0.01), lng + (Math.random()*0.02 - 0.01)]).addTo(mapInstance)
+            .bindPopup(`<b>${store.name}</b><br>${store.address}`);
+        });
+      } catch (e) { console.log('Map load error', e); }
     }
 
-    function resetDemo() {
-      if (confirm('Khôi phục toàn bộ dữ liệu ban đầu trên thiết bị này?')) {
-        state.stores = INITIAL_STORES;
-        state.foods = INITIAL_FOODS;
-        state.cart = [];
-        state.orders = [];
-        state.favorites = [];
-        state.profile = { name: '', phone: '', hamlet: TRABONG_HAMLETS[0], addressDetail: '' };
-        state.selectedAreaId = 'tb_trabong';
-        state.shippingFee = 15000;
-        state.shippingInput = '15000';
-        Object.values(STORAGE).forEach(k => localStorage.removeItem(k));
-        state.role = 'buyer';
-        state.activeTab = 'home';
-        showToast('Đã khôi phục dữ liệu ban đầu.');
-      }
-    }
-
-    // GIAO DIỆN HÀM RENDER
     function renderFoodCard(food) {
       const store = state.stores.find(s => s.id === food.storeId);
       const isFav = state.favorites.includes(food.id);
       return `
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex gap-3 p-2.5">
           <button type="button" onclick="openFoodModal(state.foods.find(f => f.id === '${food.id}'))" class="w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-gray-100">
-            <img src="${food.image}" alt="${food.name}" class="w-full h-full object-cover" />
+            <img src="${food.image}" alt="${food.name}" class="w-full h-full object-cover" onerror="this.src='https://placehold.co/200x200/059669/ffffff?text=FoodGo';" />
           </button>
           <div class="min-w-0 flex-1 flex flex-col justify-between">
             <div>
@@ -458,7 +458,7 @@
                   <svg class="w-4 h-4 ${isFav ? 'fill-rose-500 text-rose-500' : 'text-gray-300'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                 </button>
               </div>
-              <p class="text-[11px] text-gray-500 line-clamp-2 mt-1">${food.description}</p>
+              <p class="text-[11px] text-gray-500 line-clamp-2 mt-1">${food.description || 'Đặc sản ngon hấp dẫn'}</p>
               <p class="text-[10px] text-gray-400 mt-1 truncate">${store ? store.name : 'Cửa hàng'}</p>
             </div>
             <div class="flex items-center justify-between gap-2 mt-2">
@@ -479,9 +479,6 @@
 
     function renderOrderCard(order, merchantMode = false) {
       const next = merchantMode ? merchantNextAction(order) : null;
-      const isCompleted = order.status === 'COMPLETED';
-      const commissionFee = isCompleted ? Math.round(order.subtotal * 0.05) : 0;
-
       return `
         <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-3.5 space-y-3 mb-3">
           <div class="flex items-start justify-between gap-2">
@@ -495,45 +492,33 @@
             <p class="text-xs font-bold text-gray-800">${order.storeName}</p>
             ${order.items.map(item => `
               <div class="flex justify-between gap-2 text-[11px] text-gray-600">
-                <span class="min-w-0">${item.name}${item.variantLabel ? ` (${item.variantLabel})` : ''} × ${item.quantity}</span>
+                <span class="min-w-0">${item.name} × ${item.quantity}</span>
                 <span class="shrink-0 font-medium">${money(item.unitPrice * item.quantity)}</span>
               </div>
             `).join('')}
             <div class="border-t border-dashed border-gray-100 pt-1.5 mt-1 space-y-0.5 text-[10px] text-gray-500">
               <div class="flex justify-between"><span>Tạm tính tiền món:</span><span>${money(order.subtotal)}</span></div>
               <div class="flex justify-between"><span>Phí giao hàng:</span><span>${money(order.shippingFee)}</span></div>
+              <div class="flex justify-between font-bold text-emerald-700"><span>Phí dịch vụ khách hàng:</span><span>0đ (Miễn phí)</span></div>
             </div>
           </div>
 
           ${merchantMode ? `
-            <div class="bg-amber-50 border border-amber-200 rounded-xl p-2.5 space-y-1 text-[11px] text-amber-900">
+            <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 space-y-1 text-[11px] text-emerald-900">
               <div class="flex justify-between font-bold">
-                <span>Giá gốc tiền món:</span>
-                <span>${money(order.subtotal)}</span>
+                <span>Doanh thu đơn hàng (Quán nhận):</span>
+                <span class="text-emerald-700">${money(order.subtotal)}</span>
               </div>
-              ${isCompleted ? `
-                <div class="flex justify-between text-amber-800">
-                  <span>Phí dịch vụ 5% hệ thống:</span>
-                  <span class="font-bold text-rose-700">-${money(commissionFee)}</span>
-                </div>
-                <div class="flex justify-between border-t border-amber-200 pt-1 font-extrabold text-emerald-800">
-                  <span>Quán thực nhận:</span>
-                  <span>${money(order.subtotal - commissionFee)}</span>
-                </div>
-              ` : `
-                <div class="text-[10px] text-amber-700 italic">Doanh thu và phí 5% sẽ được ghi nhận sau khi đơn hoàn thành.</div>
-              `}
             </div>
             <div class="text-[11px] text-gray-600 space-y-0.5">
               <p><b>Khách hàng:</b> ${order.customerName} · ${order.customerPhone}</p>
               <p><b>Địa chỉ:</b> ${order.deliveryAddress}</p>
-              ${order.customerNote ? `<p class="text-amber-800"><b>Ghi chú:</b> ${order.customerNote}</p>` : ''}
             </div>
           ` : ''}
 
           <div class="flex items-center justify-between">
             <div><p class="text-[10px] text-gray-500">Khách thanh toán COD</p><p class="text-sm font-extrabold text-emerald-700">${money(order.total)}</p></div>
-            <button type="button" onclick="state.showOrderDetail = state.orders.find(o => o.id === '${order.id}'); render();" class="text-xs font-bold text-emerald-700 px-3 py-2 rounded-lg bg-emerald-50">Chi tiết đơn</button>
+            <button type="button" onclick="state.showOrderDetail = state.orders.find(o => o.id === '${order.id}'); render();" class="text-xs font-bold text-emerald-700 px-3 py-2 rounded-lg bg-emerald-50">Chi tiết</button>
           </div>
 
           ${merchantMode && order.status === 'PENDING_CONFIRMATION' ? `
@@ -541,9 +526,6 @@
           ` : ''}
           ${merchantMode && next ? `
             <button type="button" onclick="updateOrderStatus('${order.id}', '${next.status}', 'Chủ quán')" class="w-full py-2.5 rounded-xl bg-emerald-700 text-white text-xs font-bold shadow-sm">${next.label}</button>
-          ` : ''}
-          ${!merchantMode && order.status === 'PENDING_CONFIRMATION' ? `
-            <button type="button" onclick="updateOrderStatus('${order.id}', 'CANCELLED', 'Khách hàng')" class="w-full py-2 rounded-xl border border-rose-200 text-rose-700 text-xs font-bold">Hủy đơn hàng</button>
           ` : ''}
         </div>
       `;
@@ -568,7 +550,7 @@
       const cartSubtotal = state.cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
       const cartCount = state.cart.reduce((s, i) => s + i.quantity, 0);
       const effectiveShipping = state.cart.length ? state.shippingFee : 0;
-      const checkoutTotal = cartSubtotal + effectiveShipping;
+      const checkoutTotal = cartSubtotal + effectiveShipping; // KHÔNG CỘNG PHÍ DỊCH VỤ
 
       const currentMerchantStore = state.stores.find(s => s.id === state.merchantStoreId) || state.stores[0];
       const currentMerchantFoods = state.foods.filter(f => f.storeId === currentMerchantStore?.id);
@@ -577,7 +559,6 @@
       const categories = ['Tất cả', ...Array.from(new Set(state.foods.map(f => f.category)))];
 
       let html = `
-        <!-- HEADER THÔNG MINH -->
         <header class="sticky top-0 z-30 bg-emerald-800 text-white shadow-md">
           <div class="px-4 pt-3 pb-3 space-y-3">
             <div class="flex items-center justify-between gap-3">
@@ -585,7 +566,7 @@
                 <div class="w-10 h-10 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-lg shadow-sm">FG</div>
                 <div class="min-w-0">
                   <h1 class="font-extrabold text-base leading-tight">FoodGo Local</h1>
-                  <p class="text-[10px] text-emerald-100">Đặc sản Trà Bồng</p>
+                  <p class="text-[10px] text-emerald-100">Đặc sản Trà Bồng (Miễn phí dịch vụ)</p>
                 </div>
               </div>
               <label class="flex items-center gap-1.5 text-[10px] bg-emerald-900/80 rounded-xl px-2.5 py-2 border border-emerald-600">
@@ -614,23 +595,32 @@
         </header>
       `;
 
-      // KHÁCH HÀNG (BUYER)
+      // 1. KHÁCH HÀNG (BUYER)
       if (state.role === 'buyer') {
         html += `<main class="px-3 pt-3 space-y-5">`;
 
         if (state.activeTab === 'home') {
           html += `
             <section class="rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-600 text-white p-4 relative overflow-hidden shadow-sm">
-              <div class="relative z-10 max-w-[78%]">
-                <span class="inline-flex bg-amber-400 text-emerald-950 text-[9px] px-2 py-0.5 rounded-full font-extrabold">ĐẶC SẢN NÔNG SẢN</span>
-                <h2 class="text-lg font-extrabold mt-1.5 leading-snug">Ẩm thực Trà Bồng giao tận nhà</h2>
-                <p class="text-[11px] text-emerald-100 mt-1">Chọn món · Quán xác nhận · Giao COD</p>
+              <div class="relative z-10">
+                <span class="inline-flex bg-amber-400 text-emerald-950 text-[9px] px-2 py-0.5 rounded-full font-extrabold">0Đ PHÍ DỊCH VỤ</span>
+                <h2 class="text-lg font-extrabold mt-1.5 leading-snug">Ẩm thực & Nông sản Trà Bồng</h2>
+                <p class="text-[11px] text-emerald-100 mt-1">Kết nối trực tiếp khách hàng và chủ quán địa phương</p>
                 <button onclick="setTab('explore')" class="mt-3 bg-white text-emerald-800 rounded-xl px-3 py-2 text-xs font-extrabold shadow-sm">Khám phá thực đơn →</button>
               </div>
             </section>
 
+            <!-- BẢN ĐỒ THU GỌN - BẤM ĐỂ MỞ RỘNG KHI CẦN -->
+            <section class="bg-white rounded-2xl border border-gray-100 p-3 shadow-sm space-y-2">
+              <button onclick="state.showMap = !state.showMap; render();" class="w-full flex items-center justify-between text-xs font-bold text-gray-800 py-1">
+                <span class="flex items-center gap-1.5">🗺️ Xem bản đồ trực tuyến khu vực ${selectedArea.name}</span>
+                <span class="text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg text-[11px]">${state.showMap ? 'Thu gọn ▲' : 'Mở rộng ▼'}</span>
+              </button>
+              ${state.showMap ? `<div id="map" class="border border-gray-200 shadow-inner mt-2"></div>` : ''}
+            </section>
+
             <section class="space-y-2">
-              <div class="flex justify-between items-center"><h3 class="font-extrabold text-sm text-gray-800">Quán đang mở tại ${selectedArea.name}</h3><button onclick="setTab('explore')" class="text-xs text-emerald-700 font-bold">Xem món</button></div>
+              <div class="flex justify-between items-center"><h3 class="font-extrabold text-sm text-gray-800">Cửa hàng đang mở tại ${selectedArea.name}</h3><button onclick="setTab('explore')" class="text-xs text-emerald-700 font-bold">Xem món</button></div>
               ${areaStores.length === 0 ? `<p class="text-xs text-gray-400 py-4 text-center">Chưa có cửa hàng trong khu vực này.</p>` : `
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   ${areaStores.map(store => `
@@ -638,7 +628,7 @@
                       <img src="${store.image}" alt="${store.name}" class="w-full h-28 object-cover" />
                       <div class="p-3">
                         <div class="flex justify-between gap-2"><b class="text-xs line-clamp-2">${store.name}</b><span class="shrink-0 text-[9px] px-2 py-0.5 rounded-full h-fit ${store.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}">${store.isOpen ? 'Đang mở' : 'Tạm nghỉ'}</span></div>
-                        <p class="text-[10px] text-gray-500 mt-1">${store.category}</p>
+                        <p class="text-[10px] text-gray-500 mt-1">${store.category} · ${store.address}</p>
                       </div>
                     </button>
                   `).join('')}
@@ -698,14 +688,14 @@
             <section class="space-y-3">
               <h2 class="font-extrabold text-base">Thông tin nhận hàng</h2>
               <div class="bg-white border border-gray-100 rounded-2xl p-4 space-y-3 shadow-sm">
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Họ và tên người nhận</span><input id="profile-name" value="${state.profile.name}" oninput="state.profile.name = this.value;" class="field" placeholder="Nhập họ và tên" /></label>
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Số điện thoại</span><input id="profile-phone" value="${state.profile.phone}" oninput="state.profile.phone = this.value;" class="field" placeholder="09xxxxxxxx" inputmode="tel" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Họ và tên người nhận</span><input value="${state.profile.name}" oninput="state.profile.name = this.value;" class="field" placeholder="Nhập họ và tên" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Số điện thoại</span><input value="${state.profile.phone}" oninput="state.profile.phone = this.value;" class="field" placeholder="09xxxxxxxx" inputmode="tel" /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Chọn Thôn/Xóm (Xã Trà Bồng)</span>
                   <select onchange="state.profile.hamlet = this.value;" class="field">
                     ${TRABONG_HAMLETS.map(h => `<option value="${h}" ${state.profile.hamlet === h ? 'selected' : ''}>${h}</option>`).join('')}
                   </select>
                 </label>
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Địa chỉ chi tiết</span><textarea oninput="state.profile.addressDetail = this.value;" class="field min-h-16" placeholder="Số nhà, đường/xóm, điểm dễ nhận biết...">${state.profile.addressDetail || ''}</textarea></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Địa chỉ chi tiết</span><textarea oninput="state.profile.addressDetail = this.value;" class="field min-h-16" placeholder="Số nhà, đường/xóm...">${state.profile.addressDetail || ''}</textarea></label>
                 <button onclick="saveState(); showToast('Đã lưu thông tin nhận hàng.');" class="w-full rounded-xl bg-emerald-700 text-white py-3 text-xs font-extrabold shadow-sm">Lưu thông tin</button>
               </div>
             </section>
@@ -714,14 +704,13 @@
 
         html += `</main>`;
 
-        // GIỎ HÀNG NỔI (FLOATING CART)
         if (state.cart.length > 0 && !state.showCheckout) {
           html += `
             <div class="fixed bottom-[68px] left-0 right-0 z-30 max-w-md mx-auto px-3">
               <button onclick="startCheckout()" class="w-full rounded-2xl bg-emerald-900 text-white p-3 shadow-2xl flex items-center justify-between gap-3 border border-emerald-700">
                 <div class="flex items-center gap-2">
                   <span class="w-9 h-9 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black">🛍</span>
-                  <div class="text-left"><p class="text-[10px] text-emerald-100">Giỏ hàng · ${cartCount} món</p><p class="text-sm font-extrabold">${money(cartSubtotal)}</p></div>
+                  <div class="text-left"><p class="text-[10px] text-emerald-100">Giỏ hàng · ${cartCount} món (0đ phí dịch vụ)</p><p class="text-sm font-extrabold">${money(cartSubtotal)}</p></div>
                 </div>
                 <span class="bg-amber-400 text-emerald-950 rounded-xl px-4 py-2 text-xs font-extrabold">Xem giỏ & đặt →</span>
               </button>
@@ -729,7 +718,6 @@
           `;
         }
 
-        // THANH ĐIỀU HƯỚNG DƯỚI (BOTTOM NAV)
         html += `
           <nav class="fixed bottom-0 left-0 right-0 z-30 max-w-md mx-auto bg-white border-t border-gray-200 shadow-lg grid grid-cols-5 px-1 py-2">
             ${[['home', 'Trang chủ'], ['explore', 'Khám phá'], ['orders', 'Đơn hàng'], ['favorites', 'Yêu thích'], ['profile', 'Tài khoản']].map(([t, label]) => `
@@ -742,24 +730,25 @@
         `;
       }
 
-      // CHỦ QUÁN (MERCHANT)
+      // 2. CHỦ QUÁN (MERCHANT) - TỰ DO TẠO QUÁN VÀ THÊM MÓN KHÔNG RÀNG BUỘC
       if (state.role === 'merchant') {
         const pendingCount = merchantOrders.filter(o => o.status === 'PENDING_CONFIRMATION').length;
-        const completedSales = merchantOrders.filter(o => o.status === 'COMPLETED').reduce((s, o) => s + o.subtotal, 0);
+        const currentMonthSales = merchantOrders.filter(o => o.status === 'COMPLETED').reduce((s, o) => s + o.subtotal, 0);
 
         html += `
           <main class="px-3 pt-4 space-y-4">
             <div class="rounded-2xl bg-emerald-900 text-white p-4 shadow-md">
               <div class="flex justify-between gap-3 items-start">
                 <div class="flex-1 min-w-0">
-                  <p class="text-[10px] text-emerald-200">QUẢN LÝ GIAN HÀNG</p>
+                  <p class="text-[10px] text-emerald-200">QUẢN LÝ GIAN HÀNG CÁ NHÂN</p>
                   <h2 class="font-extrabold text-base mt-1">${currentMerchantStore ? currentMerchantStore.name : 'Cửa hàng'}</h2>
+                  <p class="text-[10px] text-emerald-100 mt-0.5">Địa chỉ: ${currentMerchantStore?.address || ''} · SĐT: ${currentMerchantStore?.phone || ''}</p>
                 </div>
               </div>
               <div class="mt-3">
                 <label class="text-[10px] text-emerald-100 font-semibold">Chọn cửa hàng quản lý:</label>
                 <select onchange="state.merchantStoreId = this.value; render();" class="mt-1 w-full rounded-lg bg-emerald-950/70 border border-emerald-600 text-white px-2 py-2 text-xs outline-none">
-                  ${state.stores.map(s => `<option value="${s.id}" class="text-gray-900" ${s.id === state.merchantStoreId ? 'selected' : ''}>${s.name}</option>`).join('')}
+                  ${state.stores.map(s => `<option value="${s.id}" class="text-gray-900" ${s.id === state.merchantStoreId ? 'selected' : ''}>${s.name} (${s.address})</option>`).join('')}
                 </select>
               </div>
 
@@ -775,14 +764,14 @@
 
               <div class="flex gap-2 mt-4">
                 <div class="flex-1 bg-white/10 rounded-xl p-3"><p class="text-[10px] text-emerald-100">Đơn chờ nhận</p><p class="text-2xl font-black">${pendingCount}</p></div>
-                <div class="flex-1 bg-white/10 rounded-xl p-3"><p class="text-[10px] text-emerald-100">Doanh số hoàn thành</p><p class="text-lg font-black">${money(completedSales)}</p></div>
+                <div class="flex-1 bg-white/10 rounded-xl p-3"><p class="text-[10px] text-emerald-100">Doanh thu tháng này</p><p class="text-lg font-black">${money(currentMonthSales)}</p></div>
               </div>
             </div>
 
             <div class="flex items-center justify-between">
-              <h3 class="font-extrabold text-sm">Danh sách gian hàng</h3>
+              <h3 class="font-extrabold text-sm">Đăng ký thêm Quán mới</h3>
               <button onclick="state.showStoreForm = true; render();" class="bg-amber-400 text-emerald-950 px-3 py-2 rounded-xl text-xs font-bold shadow-sm">
-                + Tạo cửa hàng mới
+                + Tự tạo tên quán tuỳ ý
               </button>
             </div>
 
@@ -800,12 +789,12 @@
 
             <section class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm">
               <div class="flex items-center justify-between">
-                <div><h3 class="font-extrabold text-sm">Thực đơn gian hàng</h3></div>
-                <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', description:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món</button>
+                <div><h3 class="font-extrabold text-sm">Thực đơn tự do của quán</h3></div>
+                <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', description:'', image:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món tuỳ ý</button>
               </div>
               ${currentMerchantFoods.map(food => `
                 <div class="flex items-center gap-2 border-t border-gray-100 pt-2">
-                  <img src="${food.image}" alt="${food.name}" class="w-12 h-12 rounded-lg object-cover" />
+                  <img src="${food.image}" alt="${food.name}" class="w-12 h-12 rounded-lg object-cover" onerror="this.src='https://placehold.co/200x200/059669/ffffff?text=FoodGo';" />
                   <div class="flex-1 min-w-0">
                     <p class="text-xs font-bold truncate">${food.name}</p>
                     <p class="text-[11px] text-emerald-700 font-bold">${money(food.price)}</p>
@@ -818,69 +807,74 @@
         `;
       }
 
-      // ADMIN ROLE
+      // 3. ADMIN - HIỂN THỊ TÊN TẤT CẢ CỬA HÀNG VÀ DOANH THU THÁNG TƯƠNG ƯNG
       if (state.role === 'admin') {
-        const pendingCount = state.orders.filter(o => o.status === 'PENDING_CONFIRMATION').length;
-        const completedRevenue = state.orders.filter(o => o.status === 'COMPLETED').reduce((s, o) => s + o.subtotal, 0);
+        const totalCompletedOrders = state.orders.filter(o => o.status === 'COMPLETED');
+        const totalRevenue = totalCompletedOrders.reduce((s, o) => s + o.subtotal, 0);
 
         html += `
           <main class="px-3 pt-4 space-y-4">
             <div class="rounded-2xl bg-slate-900 text-white p-4 shadow-md">
-              <p class="text-[10px] text-slate-300">BẢNG ĐIỀU KHIỂN QUẢN TRỊ</p>
+              <p class="text-[10px] text-slate-300">BẢNG QUẢN TRỊ ADMIN - TOÀN HỆ THỐNG</p>
               <h2 class="font-extrabold text-lg mt-1">FoodGo Admin Dashboard</h2>
             </div>
+            
             <div class="grid grid-cols-2 gap-2">
-              <div class="bg-white border p-3 rounded-2xl"><p class="text-[10px] text-gray-500">Tổng đơn demo</p><p class="text-base font-extrabold mt-1">${state.orders.length}</p></div>
-              <div class="bg-white border p-3 rounded-2xl"><p class="text-[10px] text-gray-500">Đơn chờ xử lý</p><p class="text-base font-extrabold mt-1">${pendingCount}</p></div>
-              <div class="bg-white border p-3 rounded-2xl"><p class="text-[10px] text-gray-500">Doanh số hoàn thành</p><p class="text-base font-extrabold mt-1">${money(completedRevenue)}</p></div>
-              <div class="bg-white border p-3 rounded-2xl"><p class="text-[10px] text-gray-500">Cửa hàng</p><p class="text-base font-extrabold mt-1">${state.stores.length}</p></div>
+              <div class="bg-white border p-3 rounded-2xl"><p class="text-[10px] text-gray-500">Tổng số cửa hàng</p><p class="text-base font-extrabold mt-1 text-emerald-700">${state.stores.length} quán</p></div>
+              <div class="bg-white border p-3 rounded-2xl"><p class="text-[10px] text-gray-500">Tổng doanh thu tháng</p><p class="text-base font-extrabold mt-1 text-emerald-700">${money(totalRevenue)}</p></div>
             </div>
+
+            <!-- HIỂN THỊ DANH SÁCH TẤT CẢ CỬA HÀNG ĐĂNG KÝ VÀ DOANH THU TƯƠNG ỨNG -->
             <section class="bg-white rounded-2xl border p-3 space-y-3 shadow-sm">
-              <h3 class="font-extrabold text-sm">Cấu hình phí giao hàng</h3>
+              <h3 class="font-extrabold text-sm text-gray-900 border-b pb-2">Danh sách tất cả cửa hàng & Doanh thu tháng hiện tại</h3>
+              <div class="space-y-3">
+                ${state.stores.map(store => {
+                  const storeOrders = state.orders.filter(o => o.storeId === store.id && o.status === 'COMPLETED');
+                  const storeRevenue = storeOrders.reduce((s, o) => s + o.subtotal, 0);
+                  const storeTotalOrders = state.orders.filter(o => o.storeId === store.id).length;
+                  return `
+                    <div class="border border-gray-100 rounded-xl p-3 bg-slate-50 space-y-1">
+                      <div class="flex justify-between items-start">
+                        <div>
+                          <b class="text-xs text-gray-900">${store.name}</b>
+                          <p class="text-[10px] text-gray-500">Địa chỉ: ${store.address} · SĐT: ${store.phone}</p>
+                        </div>
+                        <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${store.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}">${store.isOpen ? 'Đang mở' : 'Tạm nghỉ'}</span>
+                      </div>
+                      <div class="flex justify-between items-center text-xs pt-1 border-t border-gray-200 mt-2">
+                        <span class="text-gray-600">Tổng đơn: <b>${storeTotalOrders}</b></span>
+                        <span class="text-emerald-700 font-extrabold">Doanh thu tháng: ${money(storeRevenue)}</span>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </section>
+
+            <section class="bg-white rounded-2xl border p-3 space-y-3 shadow-sm">
+              <h3 class="font-extrabold text-sm">Cấu hình phí giao hàng toàn hệ thống</h3>
               <div class="flex gap-2">
                 <input type="number" min="0" value="${state.shippingInput}" oninput="state.shippingInput=this.value;" class="field flex-1" />
                 <button onclick="saveShippingFee()" class="px-4 rounded-xl bg-emerald-700 text-white text-xs font-bold">Lưu phí</button>
               </div>
             </section>
-            <section class="bg-rose-50 border border-rose-100 rounded-2xl p-3 space-y-2">
-              <h3 class="text-xs font-extrabold text-rose-900">Quản lý dữ liệu thử nghiệm</h3>
-              <button onclick="resetDemo()" class="w-full py-2.5 rounded-xl border border-rose-200 bg-white text-rose-700 text-xs font-bold">Khôi phục dữ liệu ban đầu</button>
-            </section>
           </main>
         `;
       }
 
-      // MODALS VÀ OVERLAYS
+      // MODALS
       if (state.selectedFood) {
         const food = state.selectedFood;
-        const currentVariant = food.variants ? food.variants.find(v => v.id === state.selectedVariantId) : null;
-        const variantDelta = currentVariant ? currentVariant.priceDelta : 0;
-        const unitPrice = food.price + variantDelta;
-
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto p-4 shadow-2xl">
               <div class="-mx-4 -mt-4 mb-3 relative">
-                <img src="${food.image}" class="w-full h-48 object-cover rounded-t-2xl" />
-                <button onclick="state.selectedFood=null; render();" class="absolute top-3 left-3 bg-white/90 rounded-full p-2 text-gray-800 font-bold">←</button>
+                <img src="${food.image}" class="w-full h-48 object-cover rounded-t-2xl" onerror="this.src='https://placehold.co/400x200/059669/ffffff?text=FoodGo';" />
+                <button onclick="state.selectedFood=null; render();" class="absolute top-3 left-3 bg-white/90 rounded-full px-3 py-1 text-gray-800 font-bold text-xs">← Đóng</button>
               </div>
               <h3 class="font-extrabold text-base">${food.name}</h3>
-              <p class="text-xs text-gray-500 mt-1">${food.description}</p>
+              <p class="text-xs text-gray-500 mt-1">${food.description || 'Không có mô tả chi tiết'}</p>
               <p class="text-sm font-extrabold text-emerald-700 mt-2">${money(food.price)}</p>
-
-              ${food.variants && food.variants.length ? `
-                <div class="border-t border-gray-100 pt-3 mt-3">
-                  <p class="text-xs font-bold mb-2">Chọn kích cỡ / khẩu phần</p>
-                  <div class="grid grid-cols-2 gap-2">
-                    ${food.variants.map(v => `
-                      <button onclick="state.selectedVariantId='${v.id}'; render();" class="p-3 rounded-xl border text-left ${state.selectedVariantId === v.id ? 'border-emerald-600 bg-emerald-50' : 'border-gray-200'}">
-                        <p class="text-xs font-bold">${v.label}</p>
-                        <p class="text-[10px] text-gray-500">${v.priceDelta ? `+${money(v.priceDelta)}` : 'Giá gốc'}</p>
-                      </button>
-                    `).join('')}
-                  </div>
-                </div>
-              ` : ''}
 
               <div class="mt-3">
                 <label class="text-xs font-bold">Ghi chú cho quán (không bắt buộc)</label>
@@ -893,8 +887,8 @@
                   <span class="px-3 text-sm font-bold">${state.foodQuantity}</span>
                   <button onclick="state.foodQuantity = Math.min(50, state.foodQuantity + 1); render();" class="p-2.5 font-bold">+</button>
                 </div>
-                <button onclick="requestAddToCart(state.selectedFood, state.foodQuantity, '${currentVariant ? currentVariant.label : ''}', ${unitPrice}, state.foodNote, ${variantDelta}, '${state.selectedVariantId}')" class="bg-emerald-700 text-white px-4 py-3 rounded-xl text-xs font-extrabold shadow-sm">
-                  Thêm vào giỏ · ${money(unitPrice * state.foodQuantity)}
+                <button onclick="requestAddToCart(state.selectedFood, state.foodQuantity, '', ${food.price}, state.foodNote)" class="bg-emerald-700 text-white px-4 py-3 rounded-xl text-xs font-extrabold shadow-sm">
+                  Thêm vào giỏ · ${money(food.price * state.foodQuantity)}
                 </button>
               </div>
             </div>
@@ -923,13 +917,13 @@
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto p-4 shadow-2xl">
               <div class="flex items-center justify-between border-b pb-3">
-                <div><h3 class="font-extrabold text-base">Xác nhận đơn hàng</h3><p class="text-[10px] text-gray-500 mt-0.5">Thanh toán tiền mặt COD khi nhận hàng</p></div>
+                <div><h3 class="font-extrabold text-base">Xác nhận đơn hàng</h3><p class="text-[10px] text-gray-500 mt-0.5">Thanh toán tiền mặt COD · Miễn phí dịch vụ</p></div>
                 <button onclick="state.showCheckout=false; render();" class="p-1 text-gray-400">✕</button>
               </div>
               <div class="max-h-48 overflow-y-auto space-y-2 py-3">
                 ${state.cart.map(item => `
                   <div class="flex items-center gap-2">
-                    <img src="${item.image}" class="w-11 h-11 object-cover rounded-lg" />
+                    <img src="${item.image}" class="w-11 h-11 object-cover rounded-lg" onerror="this.src='https://placehold.co/100x100/059669/ffffff?text=FoodGo';" />
                     <div class="flex-1 min-w-0">
                       <p class="text-xs font-bold truncate">${item.name}</p>
                       <p class="text-[10px] text-emerald-700 font-bold">${money(item.unitPrice)} × ${item.quantity}</p>
@@ -946,13 +940,14 @@
                     ${TRABONG_HAMLETS.map(h => `<option value="${h}" ${state.checkoutHamlet === h ? 'selected' : ''}>${h}</option>`).join('')}
                   </select>
                 </label>
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Địa chỉ chi tiết / Ghi chú giao hàng *</span><textarea oninput="state.checkoutAddressDetail=this.value;" class="field min-h-16" placeholder="Số nhà, đường/xóm, điểm dễ nhận biết...">${state.checkoutAddressDetail}</textarea></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Địa chỉ chi tiết / Ghi chú giao hàng *</span><textarea oninput="state.checkoutAddressDetail=this.value;" class="field min-h-16" placeholder="Số nhà, đường/xóm...">${state.checkoutAddressDetail}</textarea></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Ghi chú thêm cho quán</span><textarea oninput="state.checkoutNote=this.value;" class="field min-h-14" placeholder="Ví dụ: làm món ít cay...">${state.checkoutNote}</textarea></label>
               </div>
               <div class="rounded-xl bg-slate-50 p-3 mt-3 space-y-2 text-xs">
                 <div class="flex justify-between"><span class="text-gray-600">Tạm tính tiền món</span><b>${money(cartSubtotal)}</b></div>
                 <div class="flex justify-between"><span class="text-gray-600">Phí giao hàng</span><b>${money(effectiveShipping)}</b></div>
-                <div class="flex justify-between border-t border-gray-200 pt-2 text-sm font-extrabold text-emerald-700"><span>Tổng thanh toán COD</span><b>${money(checkoutTotal)}</b></div>
+                <div class="flex justify-between text-emerald-700 font-bold"><span>Phí dịch vụ khách hàng</span><b>0đ (Miễn phí)</b></div>
+                <div class="flex justify-between border-t border-gray-200 pt-2 text-sm font-extrabold text-emerald-800"><span>Tổng thanh toán COD</span><b>${money(checkoutTotal)}</b></div>
               </div>
               ${state.checkoutError ? `<p class="text-xs text-rose-700 bg-rose-50 rounded-lg p-2 mt-2">${state.checkoutError}</p>` : ''}
               <button onclick="placeOrder()" class="w-full mt-3 py-3.5 rounded-xl bg-emerald-700 text-white text-xs font-extrabold shadow-md">Xác nhận đặt hàng · ${money(checkoutTotal)}</button>
@@ -963,9 +958,6 @@
 
       if (state.showOrderDetail) {
         const o = state.showOrderDetail;
-        const isCompleted = o.status === 'COMPLETED';
-        const commission = isCompleted ? Math.round(o.subtotal * 0.05) : 0;
-
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div class="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto p-4 shadow-2xl">
@@ -981,7 +973,7 @@
               <div class="mt-3 border-t border-b border-gray-100 py-2 space-y-1">
                 ${o.items.map(item => `
                   <div class="flex justify-between text-xs text-gray-700">
-                    <span>${item.name} ${item.variantLabel ? `(${item.variantLabel})` : ''} × ${item.quantity}</span>
+                    <span>${item.name} × ${item.quantity}</span>
                     <span>${money(item.unitPrice * item.quantity)}</span>
                   </div>
                 `).join('')}
@@ -989,52 +981,66 @@
               <div class="space-y-1.5 text-xs text-gray-600 py-2">
                 <div class="flex justify-between"><span>Tạm tính tiền món:</span><span>${money(o.subtotal)}</span></div>
                 <div class="flex justify-between"><span>Phí giao hàng:</span><span>${money(o.shippingFee)}</span></div>
+                <div class="flex justify-between text-emerald-700 font-bold"><span>Phí dịch vụ:</span><span>0đ (Miễn phí)</span></div>
                 <div class="flex justify-between text-sm font-extrabold text-emerald-800 border-t pt-1.5">
                   <span>Tổng thanh toán (COD):</span>
                   <span>${money(o.total)}</span>
                 </div>
               </div>
-
-              <div class="mt-3 border-t pt-2">
-                <h4 class="text-xs font-bold mb-2">Lịch sử tiến trình đơn</h4>
-                <div class="space-y-2">
-                  ${o.events.map(e => `
-                    <div class="flex justify-between text-[11px]">
-                      <span class="font-semibold text-gray-700">${e.label}</span>
-                      <span class="text-gray-400">${formatDate(e.at)} · ${e.by}</span>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-
-              <button onclick="state.showOrderDetail=null; render();" class="w-full mt-4 py-3 bg-gray-100 rounded-xl text-xs font-bold">Đóng cửa sổ</button>
+              <button onclick="state.showOrderDetail=null; render();" class="w-full mt-4 py-3 bg-gray-100 rounded-xl text-xs font-bold">Đóng</button>
             </div>
           </div>
         `;
       }
 
+      // MODAL ĐĂNG KÝ QUÁN MỚI TÙY Ý
       if (state.showStoreForm) {
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
             <div class="bg-white w-full max-w-md rounded-2xl p-4 shadow-2xl">
-              <h3 class="font-extrabold text-base pb-2 border-b">Tạo Cửa Hàng Mới</h3>
+              <h3 class="font-extrabold text-base pb-2 border-b">Đăng ký Cửa hàng Mới (Tuỳ ý)</h3>
               <form onsubmit="createNewStore(event)" class="space-y-3 mt-3">
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên cửa hàng *</span><input oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="Ví dụ: Quán Cơm Gà Trà Bồng" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên cửa hàng / Quán ăn *</span><input oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="Ví dụ: Quán Bánh Xèo Miền Quê" /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục</span>
                   <select onchange="state.newStoreForm.category=this.value;" class="field">
                     <option>Đặc sản địa phương</option><option>Cơm - Món chính</option><option>Trà sữa - Ăn vặt</option><option>Chợ nông sản</option>
                   </select>
                 </label>
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Thôn/Xóm</span>
-                  <select onchange="state.newStoreForm.address=this.value;" class="field">
-                    ${TRABONG_HAMLETS.map(h => `<option value="${h}">${h}</option>`).join('')}
-                  </select>
-                </label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Địa chỉ cụ thể / Thôn xóm *</span><input oninput="state.newStoreForm.address=this.value;" class="field" required placeholder="Số nhà, thôn, xã Trà Bồng..." /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Số điện thoại liên hệ *</span><input oninput="state.newStoreForm.phone=this.value;" class="field" required placeholder="09xxxxxxxx" inputmode="tel" /></label>
                 <div class="flex gap-2 pt-2">
                   <button type="button" onclick="state.showStoreForm=false; render();" class="flex-1 py-3 rounded-xl border text-xs font-bold">Hủy</button>
-                  <button type="submit" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white font-extrabold text-xs">Tạo Cửa Hàng</button>
+                  <button type="submit" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white font-extrabold text-xs">Tạo Cửa Hàng Ngay</button>
                 </div>
               </form>
+            </div>
+          </div>
+        `;
+      }
+
+      // MODAL THÊM MÓN TÙY Ý KHÔNG RÀNG BUỘC
+      if (state.showFoodForm) {
+        html += `
+          <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+            <div class="bg-white w-full max-w-md rounded-2xl p-4 shadow-2xl">
+              <h3 class="font-extrabold text-base pb-2 border-b">Thêm món mới tuỳ ý</h3>
+              <div class="space-y-3 mt-3">
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên món ăn *</span><input value="${state.foodForm.name}" oninput="state.foodForm.name=this.value;" class="field" placeholder="Ví dụ: Gà đèo Măng Đen nướng" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Giá bán (VNĐ) *</span><input type="number" min="0" value="${state.foodForm.price}" oninput="state.foodForm.price=this.value;" class="field" placeholder="Ví dụ: 50000" /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục</span>
+                  <select onchange="state.foodForm.category=this.value;" class="field">
+                    <option ${state.foodForm.category==='Món ăn'?'selected':''}>Món ăn</option>
+                    <option ${state.foodForm.category==='Đồ uống'?'selected':''}>Đồ uống</option>
+                    <option ${state.foodForm.category==='Nông sản'?'selected':''}>Nông sản</option>
+                  </select>
+                </label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Link hình ảnh món (URL)</span><input value="${state.foodForm.image}" oninput="state.foodForm.image=this.value;" class="field" placeholder="https://images.unsplash.com/..." /></label>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Mô tả chi tiết</span><textarea oninput="state.foodForm.description=this.value;" class="field min-h-16" placeholder="Mô tả hương vị, thành phần...">${state.foodForm.description}</textarea></label>
+                <div class="flex gap-2 pt-2">
+                  <button onclick="state.showFoodForm=false; render();" class="flex-1 py-3 rounded-xl border text-xs font-bold">Hủy</button>
+                  <button onclick="saveFood()" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white font-extrabold text-xs">Lưu Món Mới</button>
+                </div>
+              </div>
             </div>
           </div>
         `;
@@ -1049,12 +1055,14 @@
       }
 
       app.innerHTML = html;
+
+      // Khởi tạo bản đồ nếu đang mở
+      if (state.role === 'buyer' && state.activeTab === 'home' && state.showMap) {
+        setTimeout(() => initMap(selectedArea.lat, selectedArea.lng), 100);
+      }
     }
 
     render();
   </script>
 </body>
 </html>
-```
-
-Toàn bộ **7 lỗ hổng logic** đã được sửa triệt để và đóng gói 100% vào file mã nguồn **`index.html` (Bản v3.0)** ở khung bên phải. Bạn chỉ cần copy toàn bộ nội dung file `index.html` này vào máy tính để tiến hành deploy lên Vercel nhé!
