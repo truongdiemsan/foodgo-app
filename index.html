@@ -25,14 +25,14 @@
   <script>
     // --- BỘ NHỚ LƯU TRỮ CỤC BỘ SAFE-STORAGE ---
     const STORAGE = {
-      stores: 'foodgo_v9_stores',
-      foods: 'foodgo_v9_foods',
-      cart: 'foodgo_v9_cart',
-      orders: 'foodgo_v9_orders',
-      favorites: 'foodgo_v9_favorites',
-      profile: 'foodgo_v9_profile',
-      area: 'foodgo_v9_area',
-      shipping: 'foodgo_v9_shipping_fee'
+      stores: 'foodgo_v10_stores',
+      foods: 'foodgo_v10_foods',
+      cart: 'foodgo_v10_cart',
+      orders: 'foodgo_v10_orders',
+      favorites: 'foodgo_v10_favorites',
+      profile: 'foodgo_v10_profile',
+      area: 'foodgo_v10_area',
+      shipping: 'foodgo_v10_shipping_fee'
     };
 
     const ADMINISTRATIVE_LOCATIONS = [
@@ -42,9 +42,6 @@
       { id: 'tb_taytrabong', name: 'Xã Tây Trà Bồng', district: 'Trà Bồng', lat: 15.1900, lng: 108.3100 },
       { id: 'tb_taytra', name: 'Xã Tây Trà', district: 'Trà Bồng', lat: 15.2200, lng: 108.2800 }
     ];
-
-    const INITIAL_STORES = [];
-    const INITIAL_FOODS = [];
 
     function readStorage(key, fallback) {
       try {
@@ -64,8 +61,8 @@
       role: 'buyer',
       activeTab: 'home',
       selectedAreaId: readStorage(STORAGE.area, 'tb_trabong'),
-      stores: readStorage(STORAGE.stores, INITIAL_STORES),
-      foods: readStorage(STORAGE.foods, INITIAL_FOODS),
+      stores: readStorage(STORAGE.stores, []),
+      foods: readStorage(STORAGE.foods, []),
       cart: readStorage(STORAGE.cart, []),
       orders: readStorage(STORAGE.orders, []),
       favorites: readStorage(STORAGE.favorites, []),
@@ -493,7 +490,6 @@
       render();
     }
 
-    // KHỞI TẠO BẢN ĐỒ THẢ GHIM TẠI MỤC ĐỊA CHỈ
     function initPinMap(containerId, initialLat, initialLng, onLocationSelect) {
       setTimeout(() => {
         const mapContainer = document.getElementById(containerId);
@@ -703,7 +699,6 @@
 
         if (state.activeTab === 'home') {
           html += `
-            <!-- BANNER QUẢNG CÁO NỔI BẬT THAY THẾ BANNER CŨ -->
             <section class="rounded-2xl bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-4 relative overflow-hidden shadow-md border border-emerald-600/50">
               <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl"></div>
               <div class="relative z-10">
@@ -711,7 +706,7 @@
                 <p class="text-xs text-emerald-100 font-medium mt-1">Đặt món nhanh chóng · Giao hàng tận tay · Phục vụ tận tâm</p>
                 <div class="flex gap-2 mt-3.5">
                   <button onclick="setTab('explore')" class="bg-white text-emerald-900 rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-md hover:bg-amber-400 transition">Khám phá thực đơn →</button>
-                  <button onclick="startVoiceRecognition()" class="bg-amber-400 hover:bg-amber-500 text-emerald-950 rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-md flex items-center gap-1 transition">🎙️ Đặt món bằng giọng nói</button>
+                  <button onclick="startVoiceRecognition()" class="bg-amber-400 hover:bg-amber-500 text-emerald-950 rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-md flex items-center gap-1 transition">🎙️ Nói tìm món</button>
                 </div>
               </div>
             </section>
@@ -719,10 +714,11 @@
             <section class="space-y-2">
               <div class="flex justify-between items-center"><h3 class="font-extrabold text-sm text-gray-800">Cửa hàng thực tế tại ${selectedArea.name}</h3></div>
               ${areaStores.length === 0 ? `
-                <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center space-y-2">
-                  <p class="font-bold text-xs text-gray-800">Chưa có cửa hàng nào được tạo.</p>
-                  <p class="text-[10px] text-gray-500">Tạo tài khoản và tạo cửa hàng đầu tiên ở tab <b class="text-emerald-700">Tài khoản</b>!</p>
-                  <button onclick="setTab('profile')" class="mt-2 bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold">Vào Tab Tài khoản</button>
+                <div class="bg-white rounded-2xl border border-dashed border-emerald-300 p-6 text-center space-y-2 shadow-sm bg-gradient-to-b from-emerald-50/50 to-white">
+                  <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto text-xl">🏬</div>
+                  <p class="font-extrabold text-xs text-gray-900">Các gian hàng Trà Bồng đang chuẩn bị mở bán...</p>
+                  <p class="text-[11px] text-gray-500">Bạn là chủ quán? Hãy đăng ký gian hàng ngay để đón khách tại địa phương!</p>
+                  <button onclick="setTab('profile')" class="mt-2 bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2.5 rounded-xl text-xs font-extrabold shadow-sm">✨ Đăng ký Mở Quán Ngay</button>
                 </div>
               ` : `
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -742,7 +738,13 @@
             <section class="space-y-2">
               <div class="flex items-center justify-between"><h3 class="font-extrabold text-sm text-gray-800">Thực đơn thực tế</h3><button onclick="setTab('explore')" class="text-xs text-emerald-700 font-bold">Xem tất cả</button></div>
               <div class="space-y-3">
-                ${visibleFoods.length ? visibleFoods.slice(0, 4).map(renderFoodCard).join('') : `<p class="text-xs text-gray-400 text-center py-4">Chưa có món ăn nào được đăng bán.</p>`}
+                ${visibleFoods.length ? visibleFoods.slice(0, 4).map(renderFoodCard).join('') : `
+                  <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-6 text-center space-y-2">
+                    <span class="text-2xl">🍜</span>
+                    <p class="font-bold text-xs text-gray-700">Chưa có món ăn nào được đăng bán.</p>
+                    <p class="text-[10px] text-gray-400">Hãy dùng nút 🎙️ <b>Nói</b> để tìm món hoặc chờ chủ quán cập nhật thực đơn.</p>
+                  </div>
+                `}
               </div>
             </section>
           `;
@@ -762,7 +764,14 @@
               ${areaStores.map(s => `<option value="${s.id}" ${state.selectedStoreId === s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
             </select>
             <div class="space-y-3">
-              ${visibleFoods.length ? visibleFoods.map(renderFoodCard).join('') : `<p class="text-xs text-gray-400 py-8 text-center">Không tìm thấy món ăn phù hợp.</p>`}
+              ${visibleFoods.length ? visibleFoods.map(renderFoodCard).join('') : `
+                <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-3">
+                  <div class="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto text-xl">💡</div>
+                  <p class="font-extrabold text-xs text-gray-800">Không tìm thấy món ăn phù hợp.</p>
+                  <p class="text-[11px] text-gray-500 max-w-xs mx-auto">Hãy thử chọn từ khóa khác hoặc bấm nút <b>Nói</b> để tìm món bằng giọng nói một cách nhanh chóng.</p>
+                  <button onclick="startVoiceRecognition()" class="bg-amber-400 text-emerald-950 font-bold px-4 py-2 rounded-xl text-xs shadow-sm">🎙️ Tìm món bằng giọng nói</button>
+                </div>
+              `}
             </div>
           `;
         }
@@ -771,7 +780,14 @@
           html += `
             <section class="space-y-3">
               <h2 class="font-extrabold text-base">Đơn hàng của tôi</h2>
-              ${buyerOrders.length ? buyerOrders.map(o => renderOrderCard(o)).join('') : `<p class="text-xs text-gray-400 text-center py-10">Bạn chưa có đơn hàng nào.</p>`}
+              ${buyerOrders.length ? buyerOrders.map(o => renderOrderCard(o)).join('') : `
+                <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-3">
+                  <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto text-xl">🛒</div>
+                  <p class="font-extrabold text-xs text-gray-800">Bạn chưa có đơn hàng nào.</p>
+                  <p class="text-[11px] text-gray-500">Hãy khám phá các món đặc sản hấp dẫn tại Xã Trà Bồng và đặt đơn đầu tiên ngay hôm nay!</p>
+                  <button onclick="setTab('explore')" class="bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-sm">Khám phá thực đơn ngay →</button>
+                </div>
+              `}
             </section>
           `;
         }
@@ -781,7 +797,14 @@
           html += `
             <section class="space-y-3">
               <h2 class="font-extrabold text-base">Món yêu thích</h2>
-              ${favFoods.length ? favFoods.map(renderFoodCard).join('') : `<p class="text-xs text-gray-400 text-center py-10">Chưa có món yêu thích nào.</p>`}
+              ${favFoods.length ? favFoods.map(renderFoodCard).join('') : `
+                <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-3">
+                  <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto text-xl">❤️</div>
+                  <p class="font-extrabold text-xs text-gray-800">Chưa có món yêu thích nào.</p>
+                  <p class="text-[11px] text-gray-500">Bấm vào biểu tượng trái tim <span class="text-rose-500 font-bold">♥</span> ở bất kỳ món ăn nào để lưu lại và xem lại nhanh chóng khi cần.</p>
+                  <button onclick="setTab('explore')" class="bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-xs shadow-sm">Tìm món ăn yêu thích</button>
+                </div>
+              `}
             </section>
           `;
         }
@@ -791,11 +814,11 @@
           const hasStore = !!state.profile.myStoreId;
 
           html += `
-            <section class="space-y-3">
+            <section class="space-y-4">
               <div class="flex items-center justify-between">
                 <h2 class="font-extrabold text-base">Tài khoản khách hàng</h2>
                 ${state.profile.isSaved && !state.isEditingProfile ? `
-                  <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full">✓ Đã tạo tài khoản</span>
+                  <span class="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2.5 py-1 rounded-full">✓ Đã lưu thông tin</span>
                 ` : ''}
               </div>
               
@@ -809,56 +832,57 @@
                   <input value="${state.profile.phone}" ${isDisabled ? 'disabled' : ''} oninput="state.profile.phone = this.value;" class="field" placeholder="09xxxxxxxx" inputmode="tel" />
                 </label>
                 
-                <!-- GỘP ĐỊA CHỈ & TÍCH HỢP BẢN ĐỒ THẢ GHIM -->
                 <div class="space-y-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[11px] font-bold text-gray-700">Địa chỉ giao hàng</span>
                     ${!isDisabled ? `
-                      <button type="button" onclick="state.showProfileMap = !state.showProfileMap; render();" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">
-                        📍 ${state.showProfileMap ? 'Đóng map' : 'Thả ghim trên bản đồ'}
+                      <button type="button" onclick="state.showProfileMap = !state.showProfileMap; render();" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg shadow-sm">
+                        📍 ${state.showProfileMap ? 'Đóng map' : 'Thả ghim bản đồ'}
                       </button>
                     ` : ''}
                   </div>
                   <textarea ${isDisabled ? 'disabled' : ''} id="profile-address-input" oninput="state.profile.address = this.value;" class="field min-h-16" placeholder="Thôn, Xóm, Số nhà, Cầu Đỏ, Trà Bồng...">${state.profile.address || ''}</textarea>
                   ${state.showProfileMap && !isDisabled ? `
-                    <p class="text-[10px] text-gray-500 mt-1">Chạm/Kéo thả ghim trên bản đồ để tự động điền địa chỉ chính xác:</p>
+                    <p class="text-[10px] text-gray-500 mt-1">Chạm hoặc kéo thả ghim trên bản đồ để tự động điền địa chỉ chính xác:</p>
                     <div id="profile-map-picker" class="map-picker border border-gray-200"></div>
                   ` : ''}
                 </div>
                 
                 ${state.isEditingProfile ? `
-                  <button onclick="handleSaveProfile()" class="w-full rounded-xl bg-emerald-700 text-white py-3 text-xs font-extrabold shadow-sm">Lưu thông tin tài khoản</button>
+                  <button onclick="handleSaveProfile()" class="w-full rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white py-3 text-xs font-extrabold shadow-sm">Lưu thông tin tài khoản</button>
                 ` : `
-                  <button onclick="state.isEditingProfile = true; render();" class="w-full rounded-xl bg-amber-400 text-emerald-950 py-3 text-xs font-extrabold shadow-sm">✏️ Sửa thông tin</button>
+                  <button onclick="state.isEditingProfile = true; render();" class="w-full rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 text-xs font-extrabold shadow-sm">✏️ Sửa thông tin</button>
                 `}
               </div>
 
-              ${state.profile.isSaved ? `
-                <div class="bg-gradient-to-r from-emerald-900 to-teal-800 rounded-2xl p-4 text-white shadow-md space-y-2 mt-4">
-                  <div class="flex items-center justify-between">
+              <!-- LÀM NỔI BẬT KHU VỰC TẠO CỬA HÀNG Ở TAB TÀI KHOẢN -->
+              <div class="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 rounded-2xl p-4 text-white shadow-lg space-y-3 border border-emerald-600/50 relative overflow-hidden">
+                <div class="absolute -right-4 -bottom-4 w-28 h-28 bg-amber-400/20 rounded-full blur-xl"></div>
+                <div class="relative z-10">
+                  <div class="flex items-center gap-2">
+                    <span class="text-xl">🏪</span>
                     <div>
-                      <h3 class="font-extrabold text-sm text-amber-300">🏪 Dành cho Chủ Cửa Hàng</h3>
-                      <p class="text-[11px] text-emerald-100 mt-0.5">${hasStore ? 'Bạn đã khởi tạo cửa hàng riêng thành công.' : 'Tự đăng ký kinh doanh & tạo cửa hàng tuỳ ý'}</p>
+                      <h3 class="font-extrabold text-sm text-amber-300">Dành cho Chủ Cửa Hàng & Hộ Kinh Doanh</h3>
+                      <p class="text-[11px] text-emerald-100 mt-0.5">Tự do tạo gian hàng, tự thêm món ăn và quản lý doanh thu tháng dễ dàng.</p>
                     </div>
                   </div>
                   ${hasStore ? `
-                    <button onclick="state.role='merchant'; render();" class="w-full mt-2 bg-amber-400 text-emerald-950 py-3 rounded-xl text-xs font-extrabold shadow-sm flex items-center justify-center gap-1">
+                    <button onclick="state.role='merchant'; render();" class="w-full mt-3 bg-amber-400 hover:bg-amber-500 text-emerald-950 py-3 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1 transition">
                       🏬 Vào Quản lý Cửa Hàng của tôi →
                     </button>
                   ` : `
-                    <button onclick="state.showStoreForm = true; render();" class="w-full mt-2 bg-amber-400 text-emerald-950 py-3 rounded-xl text-xs font-extrabold shadow-sm flex items-center justify-center gap-1">
-                      + Tạo Cửa Hàng Mới Ngay
+                    <button onclick="state.showStoreForm = true; render();" class="w-full mt-3 bg-amber-400 hover:bg-amber-500 text-emerald-950 py-3.5 rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition">
+                      ✨ Đăng ký Tạo Cửa Hàng Mới Ngay
                     </button>
                   `}
                 </div>
-              ` : ''}
+              </div>
             </section>
           `;
         }
 
         html += `</main>`;
 
-        // THANH GIỎ HÀNG NỔI ƯU VIỆT & SIÊU NHỎ GỌN
         if (state.cart.length > 0 && !state.showCheckout) {
           html += `
             <div class="fixed bottom-14 left-0 right-0 z-30 max-w-md mx-auto px-4 pointer-events-none">
@@ -895,7 +919,6 @@
 
         html += `
           <main class="px-3 pt-4 space-y-4">
-            <!-- BANNER VÀ THÔNG TIN CỬA HÀNG -->
             <div class="rounded-2xl overflow-hidden shadow-md bg-emerald-900 text-white relative">
               <div class="h-32 w-full relative bg-gray-200">
                 <img src="${storeBanner}" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80';" />
@@ -941,7 +964,13 @@
 
             <section class="space-y-3">
               <h3 class="font-extrabold text-sm">Đơn hàng cần xử lý</h3>
-              ${merchantOrders.length ? merchantOrders.map(o => renderOrderCard(o, true)).join('') : `<p class="text-xs text-gray-400 py-6 text-center">Chưa có đơn hàng nào.</p>`}
+              ${merchantOrders.length ? merchantOrders.map(o => renderOrderCard(o, true)).join('') : `
+                <div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-2">
+                  <div class="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto text-xl">🔔</div>
+                  <p class="font-extrabold text-xs text-gray-800">Chưa có đơn hàng nào.</p>
+                  <p class="text-[11px] text-gray-400">Đơn hàng mới từ khách mua sẽ xuất hiện ngay lập tức tại đây khi có khách đặt.</p>
+                </div>
+              `}
             </section>
 
             <section class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm">
@@ -951,7 +980,13 @@
                   <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', customCategory:'', description:'', image:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món tuỳ ý</button>
                 ` : ''}
               </div>
-              ${!currentMerchantStore ? `<p class="text-xs text-gray-400 py-4 text-center">Vui lòng tạo cửa hàng trước khi thêm món.</p>` : currentMerchantFoods.length === 0 ? `<p class="text-xs text-gray-400 py-4 text-center">Chưa có món ăn nào trong quán.</p>` : currentMerchantFoods.map(food => `
+              ${!currentMerchantStore ? `<p class="text-xs text-gray-400 py-4 text-center">Vui lòng tạo cửa hàng trước khi thêm món.</p>` : currentMerchantFoods.length === 0 ? `
+                <div class="border border-dashed border-gray-200 rounded-xl p-6 text-center space-y-2">
+                  <p class="font-bold text-xs text-gray-700">Quán chưa có món ăn nào.</p>
+                  <p class="text-[10px] text-gray-400">Thêm món ăn với hình ảnh thực tế để khách hàng bắt đầu đặt món.</p>
+                  <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', customCategory:'', description:'', image:''}; state.showFoodForm=true; render();" class="mt-1 bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold">+ Thêm món ngay</button>
+                </div>
+              ` : currentMerchantFoods.map(food => `
                 <div class="flex items-center gap-2 border-t border-gray-100 pt-2">
                   <img src="${food.image}" alt="${food.name}" class="w-12 h-12 rounded-lg object-cover" onerror="this.src='https://placehold.co/200x200/059669/ffffff?text=FoodGo';" />
                   <div class="flex-1 min-w-0">
@@ -972,16 +1007,16 @@
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl max-h-[92vh] overflow-y-auto p-4 shadow-2xl">
-              <div class="-mx-4 -mt-4 mb-3 relative">
+              <div class="relative -mx-4 -mt-4 mb-3">
                 <img src="${food.image}" class="w-full h-48 object-cover rounded-t-2xl" onerror="this.src='https://placehold.co/400x200/059669/ffffff?text=FoodGo';" />
-                <button onclick="state.selectedFood=null; render();" class="absolute top-3 left-3 bg-white/90 rounded-full px-3 py-1 text-gray-800 font-bold text-xs">← Đóng</button>
+                <button onclick="state.selectedFood=null; render();" class="absolute top-3 left-3 bg-white/90 rounded-full px-3 py-1 text-gray-800 font-bold text-xs shadow-md">← Đóng</button>
               </div>
               <h3 class="font-extrabold text-base">${food.name}</h3>
               <p class="text-xs text-gray-500 mt-1">${food.description || 'Không có mô tả chi tiết'}</p>
               <p class="text-sm font-extrabold text-emerald-700 mt-2">${money(food.price)}</p>
 
               <div class="mt-3">
-                <label class="text-xs font-bold">Ghi chú cho quán (không bắt buộc)</label>
+                <label class="text-xs font-bold text-gray-700">Ghi chú cho quán (không bắt buộc)</label>
                 <textarea oninput="state.foodNote=this.value;" class="field mt-1 min-h-16" placeholder="Ví dụ: ít cay, không hành...">${state.foodNote}</textarea>
               </div>
 
@@ -1226,7 +1261,6 @@
 
       app.innerHTML = html;
 
-      // KÍCH HOẠT BẢN ĐỒ KHI MỞ MỤC ĐỊA CHỈ
       if (state.role === 'buyer' && state.activeTab === 'profile' && state.showProfileMap && !state.profile.isSaved) {
         initPinMap('profile-map-picker', state.profile.lat || 15.1583, state.profile.lng || 108.3833, (address, lat, lng) => {
           state.profile.address = address;
