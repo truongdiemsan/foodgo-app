@@ -24,14 +24,14 @@
   <script>
     // --- BỘ NHỚ LƯU TRỮ CỤC BỘ SAFE-STORAGE ---
     const STORAGE = {
-      stores: 'foodgo_v5_stores',
-      foods: 'foodgo_v5_foods',
-      cart: 'foodgo_v5_cart',
-      orders: 'foodgo_v5_orders',
-      favorites: 'foodgo_v5_favorites',
-      profile: 'foodgo_v5_profile',
-      area: 'foodgo_v5_area',
-      shipping: 'foodgo_v5_shipping_fee'
+      stores: 'foodgo_v6_stores',
+      foods: 'foodgo_v6_foods',
+      cart: 'foodgo_v6_cart',
+      orders: 'foodgo_v6_orders',
+      favorites: 'foodgo_v6_favorites',
+      profile: 'foodgo_v6_profile',
+      area: 'foodgo_v6_area',
+      shipping: 'foodgo_v6_shipping_fee'
     };
 
     const TRABONG_HAMLETS = [
@@ -50,7 +50,7 @@
       { id: 'tb_taytra', name: 'Xã Tây Trà', district: 'Trà Bồng', lat: 15.2200, lng: 108.2800 }
     ];
 
-    // XÓA SẠCH DỮ LIỆU DEMO: Khởi tạo danh sách cửa hàng và món ăn rỗng hoàn toàn để người dùng tự nhập thực tế
+    // XÓA SẠCH DỮ LIỆU DEMO MẶC ĐỊNH
     const INITIAL_STORES = [];
     const INITIAL_FOODS = [];
 
@@ -91,9 +91,9 @@
       showOrderDetail: null,
       showFoodForm: false,
       editingFoodId: null,
-      foodForm: { name: '', price: '', category: 'Món ăn', description: '', image: '' },
+      foodForm: { name: '', price: '', category: 'Món ăn', customCategory: '', description: '', image: '' },
       showStoreForm: false,
-      newStoreForm: { name: '', category: 'Đặc sản địa phương', address: '', phone: '' },
+      newStoreForm: { name: '', category: 'Đặc sản địa phương', customCategory: '', address: '', phone: '' },
       checkoutName: '',
       checkoutPhone: '',
       checkoutHamlet: TRABONG_HAMLETS[0],
@@ -101,10 +101,9 @@
       checkoutNote: '',
       checkoutError: '',
       toast: '',
-      shippingInput: '15000',
       audioEnabled: false,
       showMap: false,
-      isListening: false // Trạng thái nhận diện giọng nói
+      isListening: false
     };
 
     let mapInstance = null;
@@ -136,11 +135,11 @@
       setTimeout(() => { if (state.toast === msg) { state.toast = ''; render(); } }, 3500);
     }
 
-    // TÍNH NĂNG TÌM KIẾM VÀ ĐẶT MÓN BẰNG GIỌNG NÓI (VOICE SEARCH & ORDER)
+    // TÍNH NĂNG TÌM KIẾM BẰNG GIỌNG NÓI
     function startVoiceRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        showToast('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói (Voice Search). Hãy dùng Google Chrome!');
+        showToast('Trình duyệt không hỗ trợ nhận diện giọng nói. Hãy dùng Google Chrome!');
         return;
       }
 
@@ -162,7 +161,7 @@
         render();
       };
 
-      recognition.onerror = function(event) {
+      recognition.onerror = function() {
         state.isListening = false;
         showToast('Không nhận diện được giọng nói. Vui lòng thử lại.');
         render();
@@ -175,12 +174,7 @@
         }
       };
 
-      try {
-        recognition.start();
-      } catch (e) {
-        state.isListening = false;
-        render();
-      }
+      try { recognition.start(); } catch (e) { state.isListening = false; render(); }
     }
 
     function enableAudioAlert() {
@@ -188,12 +182,10 @@
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         ctx.resume().then(() => {
           state.audioEnabled = true;
-          showToast('🔔 Đã bật âm thanh chuông báo đơn mới!');
+          showToast('🔔 Đã bật chuông báo đơn mới!');
           render();
         });
-      } catch {
-        showToast('Trình duyệt không hỗ trợ AudioContext.');
-      }
+      } catch { showToast('Trình duyệt không hỗ trợ AudioContext.'); }
     }
 
     function playNotificationSound() {
@@ -322,11 +314,6 @@
         render();
         return;
       }
-      if (!/^(0|\+84)[3|5|7|8|9][0-9]{8}$/.test(phone.replace(/[ .-]/g, ''))) {
-        state.checkoutError = 'Số điện thoại chưa hợp lệ. Vui lòng kiểm tra lại.';
-        render();
-        return;
-      }
 
       const cartStore = state.stores.find(s => s.id === state.cart[0].storeId);
       const subtotal = state.cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
@@ -394,13 +381,18 @@
       const name = state.newStoreForm.name.trim();
       const phone = state.newStoreForm.phone.trim();
       const address = state.newStoreForm.address.trim();
+      let category = state.newStoreForm.category;
+      if (category === 'KHAC' && state.newStoreForm.customCategory.trim()) {
+        category = state.newStoreForm.customCategory.trim();
+      }
+
       if (!name || !phone || !address) { showToast('Vui lòng điền đầy đủ tên quán, SĐT và địa chỉ.'); return; }
       
       const newId = 's_' + Date.now();
       const newStore = {
         id: newId,
         name,
-        category: state.newStoreForm.category,
+        category,
         address,
         areaId: state.selectedAreaId,
         image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80',
@@ -411,7 +403,7 @@
       state.stores.push(newStore);
       state.merchantStoreId = newId;
       state.showStoreForm = false;
-      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', address: '', phone: '' };
+      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', customCategory: '', address: '', phone: '' };
       saveState();
       showToast(`Đã tạo thành công cửa hàng "${name}".`);
     }
@@ -432,7 +424,10 @@
       const name = state.foodForm.name.trim();
       const price = Number(state.foodForm.price);
       const desc = state.foodForm.description.trim();
-      const category = state.foodForm.category;
+      let category = state.foodForm.category;
+      if (category === 'KHAC' && state.foodForm.customCategory.trim()) {
+        category = state.foodForm.customCategory.trim();
+      }
       const customImage = state.foodForm.image.trim() || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=700&q=80';
 
       if (!name || !Number.isFinite(price) || price < 0) {
@@ -458,7 +453,7 @@
           inStock: true
         };
         state.foods.unshift(newFood);
-        showToast('Đã thêm món mới tuỳ ý thành công.');
+        showToast('Đã thêm món mới thành công.');
       }
       state.showFoodForm = false;
       saveState();
@@ -483,7 +478,7 @@
           L.marker([lat + (Math.random()*0.02 - 0.01), lng + (Math.random()*0.02 - 0.01)]).addTo(mapInstance)
             .bindPopup(`<b>${store.name}</b><br>${store.address}`);
         });
-      } catch (e) { console.log('Map load error', e); }
+      } catch (e) {}
     }
 
     function renderFoodCard(food) {
@@ -638,7 +633,6 @@
                   <svg class="absolute left-3 top-3 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                   ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" class="absolute right-2 top-2 p-1 text-gray-400">✕</button>` : ''}
                 </div>
-                <!-- NÚT TÌM KIẾM BẰNG GIỌNG NÓI (VOICE SEARCH) -->
                 <button onclick="startVoiceRecognition()" title="Tìm món bằng giọng nói" class="bg-amber-400 hover:bg-amber-500 text-emerald-950 px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1 shadow-sm shrink-0">
                   🎙️ ${state.isListening ? 'Đang nghe...' : 'Nói'}
                 </button>
@@ -855,7 +849,7 @@
               <div class="flex items-center justify-between">
                 <div><h3 class="font-extrabold text-sm">Thực đơn tự do của quán</h3></div>
                 ${currentMerchantStore ? `
-                  <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', description:'', image:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món tuỳ ý</button>
+                  <button onclick="state.editingFoodId=null; state.foodForm={name:'', price:'', category:'Món ăn', customCategory:'', description:'', image:''}; state.showFoodForm=true; render();" class="bg-emerald-700 text-white rounded-xl px-3 py-2 text-[11px] font-bold">+ Thêm món tuỳ ý</button>
                 ` : ''}
               </div>
               ${!currentMerchantStore ? `<p class="text-xs text-gray-400 py-4 text-center">Vui lòng tạo cửa hàng trước khi thêm món.</p>` : currentMerchantFoods.length === 0 ? `<p class="text-xs text-gray-400 py-4 text-center">Chưa có món ăn nào trong quán.</p>` : currentMerchantFoods.map(food => `
@@ -863,7 +857,7 @@
                   <img src="${food.image}" alt="${food.name}" class="w-12 h-12 rounded-lg object-cover" onerror="this.src='https://placehold.co/200x200/059669/ffffff?text=FoodGo';" />
                   <div class="flex-1 min-w-0">
                     <p class="text-xs font-bold truncate">${food.name}</p>
-                    <p class="text-[11px] text-emerald-700 font-bold">${money(food.price)}</p>
+                    <p class="text-[11px] text-emerald-700 font-bold">${money(food.price)} · <span class="text-gray-500 font-normal">${food.category}</span></p>
                   </div>
                   <button onclick="toggleFoodStock('${food.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-bold ${food.inStock ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}">${food.inStock ? 'Hết món' : 'Mở bán'}</button>
                 </div>
@@ -873,7 +867,7 @@
         `;
       }
 
-      // 3. ADMIN - HIỂN THỊ TÊN TẤT CẢ CỬA HÀNG VÀ DOANH THU THÁNG TƯƠNG ƯNG
+      // 3. ADMIN - HIỂN THỊ TÊN TẤT CẢ CỬA HÀNG VÀ DOANH THU THÁNG TƯƠNG ỨNG
       if (state.role === 'admin') {
         const totalCompletedOrders = state.orders.filter(o => o.status === 'COMPLETED');
         const totalRevenue = totalCompletedOrders.reduce((s, o) => s + o.subtotal, 0);
@@ -903,7 +897,7 @@
                       <div class="flex justify-between items-start">
                         <div>
                           <b class="text-xs text-gray-900">${store.name}</b>
-                          <p class="text-[10px] text-gray-500">Địa chỉ: ${store.address} · SĐT: ${store.phone}</p>
+                          <p class="text-[10px] text-gray-500">Loại: ${store.category} · ĐC: ${store.address} · SĐT: ${store.phone}</p>
                         </div>
                         <span class="text-[10px] px-2 py-0.5 rounded-full font-bold ${store.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}">${store.isOpen ? 'Đang mở' : 'Tạm nghỉ'}</span>
                       </div>
@@ -1058,11 +1052,18 @@
               <h3 class="font-extrabold text-base pb-2 border-b">Đăng ký Cửa hàng Mới (Tuỳ ý)</h3>
               <form onsubmit="createNewStore(event)" class="space-y-3 mt-3">
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên cửa hàng / Quán ăn *</span><input oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="Ví dụ: Quán Cơm Gà Trà Bồng" /></label>
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục</span>
-                  <select onchange="state.newStoreForm.category=this.value;" class="field">
-                    <option>Đặc sản địa phương</option><option>Cơm - Món chính</option><option>Trà sữa - Ăn vặt</option><option>Chợ nông sản</option>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục dịch vụ</span>
+                  <select onchange="state.newStoreForm.category=this.value; render();" class="field">
+                    <option value="Đặc sản địa phương" ${state.newStoreForm.category === 'Đặc sản địa phương' ? 'selected' : ''}>Đặc sản địa phương</option>
+                    <option value="Cơm - Món chính" ${state.newStoreForm.category === 'Cơm - Món chính' ? 'selected' : ''}>Cơm - Món chính</option>
+                    <option value="Trà sữa - Ăn vặt" ${state.newStoreForm.category === 'Trà sữa - Ăn vặt' ? 'selected' : ''}>Trà sữa - Ăn vặt</option>
+                    <option value="Chợ nông sản" ${state.newStoreForm.category === 'Chợ nông sản' ? 'selected' : ''}>Chợ nông sản</option>
+                    <option value="KHAC" ${state.newStoreForm.category === 'KHAC' ? 'selected' : ''}>+ Danh mục khác (Tự nhập tuỳ ý)</option>
                   </select>
                 </label>
+                ${state.newStoreForm.category === 'KHAC' ? `
+                  <label class="block space-y-1"><span class="text-[11px] font-bold text-emerald-700">Nhập tên danh mục tự chọn *</span><input oninput="state.newStoreForm.customCategory=this.value;" class="field border-emerald-300 bg-emerald-50" required placeholder="Ví dụ: Lẩu & Nướng, Bún phở..." /></label>
+                ` : ''}
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Địa chỉ cụ thể / Thôn xóm *</span><input oninput="state.newStoreForm.address=this.value;" class="field" required placeholder="Số nhà, thôn, xã Trà Bồng..." /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Số điện thoại liên hệ *</span><input oninput="state.newStoreForm.phone=this.value;" class="field" required placeholder="09xxxxxxxx" inputmode="tel" /></label>
                 <div class="flex gap-2 pt-2">
@@ -1083,13 +1084,17 @@
               <div class="space-y-3 mt-3">
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Tên món ăn *</span><input value="${state.foodForm.name}" oninput="state.foodForm.name=this.value;" class="field" placeholder="Ví dụ: Gà nướng muối ớt" /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Giá bán (VNĐ) *</span><input type="number" min="0" value="${state.foodForm.price}" oninput="state.foodForm.price=this.value;" class="field" placeholder="Ví dụ: 50000" /></label>
-                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục</span>
-                  <select onchange="state.foodForm.category=this.value;" class="field">
-                    <option ${state.foodForm.category==='Món ăn'?'selected':''}>Món ăn</option>
-                    <option ${state.foodForm.category==='Đồ uống'?'selected':''}>Đồ uống</option>
-                    <option ${state.foodForm.category==='Nông sản'?'selected':''}>Nông sản</option>
+                <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Danh mục món</span>
+                  <select onchange="state.foodForm.category=this.value; render();" class="field">
+                    <option value="Món ăn" ${state.foodForm.category==='Món ăn'?'selected':''}>Món ăn</option>
+                    <option value="Đồ uống" ${state.foodForm.category==='Đồ uống'?'selected':''}>Đồ uống</option>
+                    <option value="Nông sản" ${state.foodForm.category==='Nông sản'?'selected':''}>Nông sản</option>
+                    <option value="KHAC" ${state.foodForm.category==='KHAC'?'selected':''}>+ Danh mục khác (Tự nhập tuỳ ý)</option>
                   </select>
                 </label>
+                ${state.foodForm.category === 'KHAC' ? `
+                  <label class="block space-y-1"><span class="text-[11px] font-bold text-emerald-700">Nhập danh mục tự chọn *</span><input value="${state.foodForm.customCategory}" oninput="state.foodForm.customCategory=this.value;" class="field border-emerald-300 bg-emerald-50" placeholder="Ví dụ: Món ăn sáng, Đồ ăn vặt..." /></label>
+                ` : ''}
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Link hình ảnh món (URL)</span><input value="${state.foodForm.image}" oninput="state.foodForm.image=this.value;" class="field" placeholder="https://images.unsplash.com/..." /></label>
                 <label class="block space-y-1"><span class="text-[11px] font-bold text-gray-700">Mô tả chi tiết</span><textarea oninput="state.foodForm.description=this.value;" class="field min-h-16" placeholder="Mô tả hương vị, thành phần...">${state.foodForm.description}</textarea></label>
                 <div class="flex gap-2 pt-2">
