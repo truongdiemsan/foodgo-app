@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>FoodGo Local - Đặc Sản & Ẩm Thực Trà Bồng</title>
+  <title>FoodGo Local - Giao Đồ Ăn & Đặc Sản Tận Nơi</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Nhúng Leaflet CSS cho Bản đồ thả ghim -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -25,14 +25,14 @@
   <script>
     // --- BỘ NHỚ LƯU TRỮ CỤC BỘ SAFE-STORAGE ---
     const STORAGE = {
-      stores: 'foodgo_v8_stores',
-      foods: 'foodgo_v8_foods',
-      cart: 'foodgo_v8_cart',
-      orders: 'foodgo_v8_orders',
-      favorites: 'foodgo_v8_favorites',
-      profile: 'foodgo_v8_profile',
-      area: 'foodgo_v8_area',
-      shipping: 'foodgo_v8_shipping_fee'
+      stores: 'foodgo_v9_stores',
+      foods: 'foodgo_v9_foods',
+      cart: 'foodgo_v9_cart',
+      orders: 'foodgo_v9_orders',
+      favorites: 'foodgo_v9_favorites',
+      profile: 'foodgo_v9_profile',
+      area: 'foodgo_v9_area',
+      shipping: 'foodgo_v9_shipping_fee'
     };
 
     const ADMINISTRATIVE_LOCATIONS = [
@@ -88,7 +88,7 @@
       editingFoodId: null,
       foodForm: { name: '', price: '', category: 'Món ăn', customCategory: '', description: '', image: '' },
       showStoreForm: false,
-      newStoreForm: { name: '', category: 'Đặc sản địa phương', customCategory: '', address: '', phone: '', lat: 15.1583, lng: 108.3833 },
+      newStoreForm: { name: '', category: 'Đặc sản địa phương', customCategory: '', address: '', phone: '', image: '', lat: 15.1583, lng: 108.3833 },
       checkoutName: '',
       checkoutPhone: '',
       checkoutAddress: '',
@@ -132,12 +132,12 @@
       setTimeout(() => { if (state.toast === msg) { state.toast = ''; render(); } }, 3500);
     }
 
-    function handleImageUpload(input) {
+    function handleImageUpload(input, callback) {
       if (input.files && input.files[0]) {
         const file = input.files[0];
         const reader = new FileReader();
         reader.onload = function(e) {
-          state.foodForm.image = e.target.result;
+          callback(e.target.result);
           render();
         };
         reader.readAsDataURL(file);
@@ -387,6 +387,7 @@
       const name = state.newStoreForm.name.trim();
       const phone = state.newStoreForm.phone.trim() || state.profile.phone.trim();
       const address = state.newStoreForm.address.trim() || state.profile.address.trim();
+      const banner = state.newStoreForm.image.trim() || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80';
       let category = state.newStoreForm.category;
       if (category === 'KHAC' && state.newStoreForm.customCategory.trim()) {
         category = state.newStoreForm.customCategory.trim();
@@ -401,7 +402,7 @@
         category,
         address,
         areaId: state.selectedAreaId,
-        image: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80',
+        image: banner,
         isOpen: true,
         prepTime: '15-20 phút',
         phone
@@ -411,9 +412,16 @@
       state.profile.myStoreId = newId;
       state.showStoreForm = false;
       state.role = 'merchant';
-      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', customCategory: '', address: '', phone: '' };
+      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', customCategory: '', address: '', phone: '', image: '' };
       saveState();
       showToast(`Chúc mừng! Đã tạo cửa hàng "${name}" thành công!`);
+    }
+
+    function updateStoreBanner(storeId, newImage) {
+      state.stores = state.stores.map(s => s.id === storeId ? { ...s, image: newImage } : s);
+      saveState();
+      showToast('Đã cập nhật banner cửa hàng thành công!');
+      render();
     }
 
     function toggleStoreOpen(storeId) {
@@ -658,7 +666,7 @@
                 <div class="w-10 h-10 rounded-xl bg-amber-400 text-emerald-950 flex items-center justify-center font-black text-lg shadow-sm">FG</div>
                 <div class="min-w-0">
                   <h1 class="font-extrabold text-base leading-tight">FoodGo Local</h1>
-                  <p class="text-[10px] text-emerald-100">Đặc sản Trà Bồng (Miễn phí dịch vụ)</p>
+                  <p class="text-[10px] text-emerald-100">Ứng dụng giao món ngon tận nơi</p>
                 </div>
               </div>
               ${state.role === 'merchant' ? `
@@ -695,14 +703,15 @@
 
         if (state.activeTab === 'home') {
           html += `
-            <section class="rounded-2xl bg-gradient-to-r from-emerald-700 to-teal-600 text-white p-4 relative overflow-hidden shadow-sm">
+            <!-- BANNER QUẢNG CÁO NỔI BẬT THAY THẾ BANNER CŨ -->
+            <section class="rounded-2xl bg-gradient-to-r from-emerald-800 via-teal-700 to-emerald-900 text-white p-4 relative overflow-hidden shadow-md border border-emerald-600/50">
+              <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-amber-400/20 rounded-full blur-2xl"></div>
               <div class="relative z-10">
-                <span class="inline-flex bg-amber-400 text-emerald-950 text-[9px] px-2 py-0.5 rounded-full font-extrabold">0Đ PHÍ DỊCH VỤ</span>
-                <h2 class="text-lg font-extrabold mt-1.5 leading-snug">Ẩm thực & Nông sản Trà Bồng</h2>
-                <p class="text-[11px] text-emerald-100 mt-1">Hệ thống gọi món trực tiếp từ các quán tự do tại địa phương</p>
-                <div class="flex gap-2 mt-3">
-                  <button onclick="setTab('explore')" class="bg-white text-emerald-800 rounded-xl px-3 py-2 text-xs font-extrabold shadow-sm">Khám phá thực đơn →</button>
-                  <button onclick="startVoiceRecognition()" class="bg-amber-400 text-emerald-950 rounded-xl px-3 py-2 text-xs font-extrabold shadow-sm flex items-center gap-1">🎙️ Đặt món bằng giọng nói</button>
+                <h2 class="text-xl font-black text-amber-300 tracking-tight leading-tight uppercase">🚀 ĐẶC SẢN & MÓN NGON GIAO TẬN NƠI</h2>
+                <p class="text-xs text-emerald-100 font-medium mt-1">Đặt món nhanh chóng · Giao hàng tận tay · Phục vụ tận tâm</p>
+                <div class="flex gap-2 mt-3.5">
+                  <button onclick="setTab('explore')" class="bg-white text-emerald-900 rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-md hover:bg-amber-400 transition">Khám phá thực đơn →</button>
+                  <button onclick="startVoiceRecognition()" class="bg-amber-400 hover:bg-amber-500 text-emerald-950 rounded-xl px-3.5 py-2 text-xs font-extrabold shadow-md flex items-center gap-1 transition">🎙️ Đặt món bằng giọng nói</button>
                 </div>
               </div>
             </section>
@@ -719,7 +728,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   ${areaStores.map(store => `
                     <button type="button" onclick="state.selectedStoreId='${store.id}'; setTab('explore');" class="text-left bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
-                      <img src="${store.image}" alt="${store.name}" class="w-full h-28 object-cover" />
+                      <img src="${store.image}" alt="${store.name}" class="w-full h-28 object-cover" onerror="this.src='https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80';" />
                       <div class="p-3">
                         <div class="flex justify-between gap-2"><b class="text-xs line-clamp-2">${store.name}</b><span class="shrink-0 text-[9px] px-2 py-0.5 rounded-full h-fit ${store.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-500'}">${store.isOpen ? 'Đang mở' : 'Tạm nghỉ'}</span></div>
                         <p class="text-[10px] text-gray-500 mt-1">${store.category} · ${store.address}</p>
@@ -882,31 +891,44 @@
       if (state.role === 'merchant') {
         const pendingCount = merchantOrders.filter(o => o.status === 'PENDING_CONFIRMATION').length;
         const currentMonthSales = merchantOrders.filter(o => o.status === 'COMPLETED').reduce((s, o) => s + o.subtotal, 0);
+        const storeBanner = currentMerchantStore?.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80';
 
         html += `
           <main class="px-3 pt-4 space-y-4">
-            <div class="rounded-2xl bg-emerald-900 text-white p-4 shadow-md">
-              <div class="flex justify-between gap-3 items-start">
-                <div class="flex-1 min-w-0">
-                  <p class="text-[10px] text-emerald-200">GIAO DIỆN QUẢN LÝ CỬA HÀNG</p>
-                  <h2 class="font-extrabold text-base mt-1">${currentMerchantStore ? currentMerchantStore.name : 'Cửa hàng của tôi'}</h2>
-                  <p class="text-[10px] text-emerald-100 mt-0.5">${currentMerchantStore ? `Địa chỉ: ${currentMerchantStore.address} · SĐT: ${currentMerchantStore.phone}` : ''}</p>
-                </div>
+            <!-- BANNER VÀ THÔNG TIN CỬA HÀNG -->
+            <div class="rounded-2xl overflow-hidden shadow-md bg-emerald-900 text-white relative">
+              <div class="h-32 w-full relative bg-gray-200">
+                <img src="${storeBanner}" class="w-full h-full object-cover" onerror="this.src='https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80';" />
+                <div class="absolute inset-0 bg-black/40"></div>
+                <label class="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-xl px-2.5 py-1.5 text-[10px] font-bold cursor-pointer backdrop-blur-sm transition">
+                  📷 Đổi Banner
+                  <input type="file" accept="image/*" capture="environment" onchange="handleImageUpload(this, (url) => updateStoreBanner('${currentMerchantStore?.id}', url))" class="hidden" />
+                </label>
               </div>
 
-              <div class="mt-3 pt-3 border-t border-emerald-800 flex items-center justify-between">
-                <div>
-                  <p class="text-[10px] text-emerald-200">Chuông báo đơn mới:</p>
-                  <p class="text-xs font-bold ${state.audioEnabled ? 'text-amber-300' : 'text-rose-300'}">${state.audioEnabled ? '● Đã bật chuông' : '○ Chưa bật'}</p>
+              <div class="p-4 relative space-y-3">
+                <div class="flex justify-between gap-3 items-start">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-[10px] text-emerald-200 font-semibold">GIAO DIỆN QUẢN LÝ CỬA HÀNG</p>
+                    <h2 class="font-extrabold text-lg mt-0.5">${currentMerchantStore ? currentMerchantStore.name : 'Cửa hàng của tôi'}</h2>
+                    <p class="text-[11px] text-emerald-100 mt-0.5">${currentMerchantStore ? `Địa chỉ: ${currentMerchantStore.address} · SĐT: ${currentMerchantStore.phone}` : ''}</p>
+                  </div>
                 </div>
-                ${!state.audioEnabled ? `
-                  <button onclick="enableAudioAlert()" class="bg-amber-400 text-emerald-950 px-3 py-1.5 rounded-lg text-xs font-bold">Bật chuông báo</button>
-                ` : ''}
-              </div>
 
-              <div class="flex gap-2 mt-4">
-                <div class="flex-1 bg-white/10 rounded-xl p-3"><p class="text-[10px] text-emerald-100">Đơn chờ nhận</p><p class="text-2xl font-black">${pendingCount}</p></div>
-                <div class="flex-1 bg-white/10 rounded-xl p-3"><p class="text-[10px] text-emerald-100">Doanh thu tháng này</p><p class="text-lg font-black">${money(currentMonthSales)}</p></div>
+                <div class="pt-3 border-t border-emerald-800/80 flex items-center justify-between">
+                  <div>
+                    <p class="text-[10px] text-emerald-200">Chuông báo đơn mới:</p>
+                    <p class="text-xs font-bold ${state.audioEnabled ? 'text-amber-300' : 'text-rose-300'}">${state.audioEnabled ? '● Đã bật chuông' : '○ Chưa bật'}</p>
+                  </div>
+                  ${!state.audioEnabled ? `
+                    <button onclick="enableAudioAlert()" class="bg-amber-400 text-emerald-950 px-3 py-1.5 rounded-xl text-xs font-extrabold shadow-sm">Bật chuông báo</button>
+                  ` : ''}
+                </div>
+
+                <div class="flex gap-2 pt-1">
+                  <div class="flex-1 bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10"><p class="text-[10px] text-emerald-100">Đơn chờ nhận</p><p class="text-2xl font-black">${pendingCount}</p></div>
+                  <div class="flex-1 bg-white/10 backdrop-blur-sm rounded-xl p-3 border border-white/10"><p class="text-[10px] text-emerald-100">Doanh thu tháng này</p><p class="text-lg font-black">${money(currentMonthSales)}</p></div>
+                </div>
               </div>
             </div>
 
@@ -1105,6 +1127,22 @@
                 ` : ''}
                 
                 <div class="space-y-1">
+                  <span class="text-[11px] font-bold text-gray-700">Hình ảnh Banner Cửa hàng</span>
+                  <label class="flex border border-dashed border-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl p-3 text-center cursor-pointer transition">
+                    <span class="text-xs font-bold text-emerald-800 w-full flex items-center justify-center gap-1">
+                      📷 Chụp ảnh / Tải ảnh Banner
+                    </span>
+                    <input type="file" accept="image/*" capture="environment" onchange="handleImageUpload(this, (url) => state.newStoreForm.image = url)" class="hidden" />
+                  </label>
+                  ${state.newStoreForm.image ? `
+                    <div class="relative mt-2 rounded-xl overflow-hidden border border-gray-200">
+                      <img src="${state.newStoreForm.image}" class="w-full h-24 object-cover" />
+                      <button type="button" onclick="state.newStoreForm.image=''; render();" class="absolute top-2 right-2 bg-rose-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold shadow-md">✕</button>
+                    </div>
+                  ` : ''}
+                </div>
+
+                <div class="space-y-1">
                   <div class="flex items-center justify-between">
                     <span class="text-[11px] font-bold text-gray-700">Địa chỉ cửa hàng</span>
                     <button type="button" onclick="state.showStoreMap = !state.showStoreMap; render();" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-lg">
@@ -1156,7 +1194,7 @@
                       <span class="text-xs font-bold text-emerald-800 flex items-center justify-center gap-1">
                         📷 Chụp ảnh / Tải ảnh lên
                       </span>
-                      <input type="file" accept="image/*" capture="environment" onchange="handleImageUpload(this)" class="hidden" />
+                      <input type="file" accept="image/*" capture="environment" onchange="handleImageUpload(this, (url) => state.foodForm.image = url)" class="hidden" />
                     </label>
                   </div>
                   ${state.foodForm.image ? `
