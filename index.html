@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>FoodGo Local - Đặt Món Siêu Tốc Xã Trà Bồng</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
@@ -20,6 +21,13 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
+    // KẾT NỐI SUPABASE CLOUD (Đã gắn sẵn URL & API Key của bạn)
+    const SUPABASE_URL = 'https://rakzmchiogtdzewmnqtx.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_UWma5fNOpeRxqisoflg4hQ_d_jgZ_j9';
+    const supabaseClient = (typeof window.supabase !== 'undefined') 
+      ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
+      : null;
+
     const STORAGE = {
       stores: 'foodgo_v12_stores',
       foods: 'foodgo_v12_foods',
@@ -78,6 +86,15 @@
       reader.readAsDataURL(file);
     }
 
+    function handleImageUpload(input, maxWidth, callback) {
+      if (input.files && input.files[0]) {
+        compressImage(input.files[0], maxWidth, (compressedUrl) => {
+          callback(compressedUrl);
+          render();
+        });
+      }
+    }
+
     const savedProfile = readStorage(STORAGE.profile, { name: '', phone: '', address: '', myStoreId: '' });
 
     // 4 TABS ULTRA-SIMPLE ARCHITECTURE
@@ -115,6 +132,59 @@
     let activeMapInstance = null;
     let activeMapMarker = null;
 
+    // TẢI DỮ LIỆU TỪ SUPABASE CLOUD KHI MỞ APP
+    async function loadCloudData() {
+      if (!supabaseClient) return;
+      try {
+        const [storesRes, foodsRes, ordersRes] = await Promise.all([
+          supabaseClient.from('stores').select('*').order('created_at', { ascending: false }),
+          supabaseClient.from('foods').select('*').order('created_at', { ascending: false }),
+          supabaseClient.from('orders').select('*').order('created_at', { ascending: false })
+        ]);
+
+        if (storesRes.data) {
+          state.stores = storesRes.data.map(s => ({
+            id: s.id, name: s.name, category: s.category, address: s.address,
+            areaId: s.area_id, image: s.image, isOpen: s.is_open, phone: s.phone
+          }));
+        }
+        if (foodsRes.data) {
+          state.foods = foodsRes.data.map(f => ({
+            id: f.id, storeId: f.store_id, name: f.name, price: Number(f.price),
+            category: f.category, description: f.description, image: f.image, inStock: f.in_stock
+          }));
+        }
+        if (ordersRes.data) {
+          state.orders = ordersRes.data.map(o => ({
+            id: o.id, storeId: o.store_id, storeName: o.store_name, items: o.items || [],
+            subtotal: Number(o.subtotal), shippingFee: Number(o.shipping_fee), total: Number(o.total),
+            fulfillmentMethod: o.fulfillment_method, pickupTime: o.pickup_time, status: o.status,
+            customerName: o.customer_name, customerPhone: o.customer_phone, deliveryAddress: o.delivery_address,
+            customerNote: o.customer_note, createdAt: o.created_at
+          }));
+        }
+        saveState();
+        render();
+      } catch (err) {
+        console.error('Lỗi đồng bộ Cloud:', err);
+      }
+    }
+
+    // LẮNG NGHE THAY ĐỔI REALTIME TỪ SUPABASE
+    function setupRealtimeSync() {
+      if (!supabaseClient) return;
+      supabaseClient.channel('foodgo-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => loadCloudData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'foods' }, () => loadCloudData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+          loadCloudData();
+          if (payload.eventType === 'INSERT' && payload.new.store_id === state.profile.myStoreId) {
+            showToast(`🔔 CÓ ĐƠN HÀNG MỚI #${payload.new.id}!`);
+          }
+        })
+        .subscribe();
+    }
+
     function saveState() {
       safeWrite(STORAGE.stores, state.stores);
       safeWrite(STORAGE.foods, state.foods);
@@ -142,6 +212,15 @@
     }
 
     function setTab(t) { state.activeTab = t; render(); }
+
+    function startCheckout() {
+      if (!state.cart.length) return;
+      state.checkoutName = state.profile.name || '';
+      state.checkoutPhone = state.profile.phone || '';
+      state.checkoutAddress = state.profile.address || '';
+      state.showCheckout = true;
+      render();
+    }
 
     function startVoiceRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -173,10 +252,9 @@
       if (!store || !store.isOpen) { showToast('Quán hiện đang tạm nghỉ.'); return; }
       if (!food.inStock) { showToast('Món này đã hết.'); return; }
 
-      // Check store consistency
       if (state.cart.length && state.cart[0].storeId !== food.storeId) {
-        if (!confirm('Giỏ hàng có món từ quán khác. Bạn có muốn xóa giỏ cũ để đặt món từ quán này?')) return;
         state.cart = [];
+        showToast('Đã làm mới giỏ hàng theo quán mới.');
       }
 
       const cartKey = food.id;
@@ -220,9 +298,9 @@
 
       const newOrder = {
         id: orderId,
-        storeId: cartStore.id,
-        storeName: cartStore.name,
-        storePhone: cartStore.phone || '',
+        storeId: cartStore ? cartStore.id : '',
+        storeName: cartStore ? cartStore.name : 'Cửa hàng',
+        storePhone: cartStore ? (cartStore.phone || '') : '',
         items: [...state.cart],
         subtotal,
         shippingFee: ship,
@@ -243,6 +321,18 @@
       state.cart = [];
       state.showCheckout = false;
       saveState();
+
+      // LƯU ĐƠN HÀNG LÊN SUPABASE CLOUD
+      if (supabaseClient) {
+        supabaseClient.from('orders').insert([{
+          id: newOrder.id, store_id: newOrder.storeId, store_name: newOrder.storeName,
+          items: newOrder.items, subtotal: newOrder.subtotal, shipping_fee: newOrder.shippingFee,
+          total: newOrder.total, fulfillment_method: newOrder.fulfillmentMethod, pickup_time: newOrder.pickupTime,
+          status: newOrder.status, customer_name: newOrder.customerName, customer_phone: newOrder.customerPhone,
+          delivery_address: newOrder.deliveryAddress, customer_note: newOrder.customerNote, created_at: newOrder.createdAt
+        }]).then(({ error }) => { if (error) console.error('Lỗi lưu đơn Cloud:', error); });
+      }
+
       setTab('orders');
       showToast(`Đã gửi đơn hàng ${orderId} thành công!`);
     }
@@ -269,6 +359,16 @@
       state.showStoreForm = false;
       state.newStoreForm = { name: '', category: 'Đặc sản địa phương', address: '', phone: '', image: '' };
       saveState();
+
+      // LƯU CỬA HÀNG LÊN SUPABASE CLOUD
+      if (supabaseClient) {
+        supabaseClient.from('stores').insert([{
+          id: newStore.id, name: newStore.name, category: newStore.category,
+          address: newStore.address, area_id: newStore.areaId, image: newStore.image,
+          is_open: newStore.isOpen, phone: newStore.phone
+        }]).then(({ error }) => { if (error) console.error('Lỗi lưu quán Cloud:', error); });
+      }
+
       setTab('mystore');
       showToast(`Đã tạo quán "${name}" thành công!`);
     }
@@ -294,7 +394,39 @@
       state.showFoodForm = false;
       state.foodForm = { name: '', priceInput: '', category: 'Món ăn', description: '', image: '' };
       saveState();
+
+      // LƯU MÓN ĂN LÊN SUPABASE CLOUD
+      if (supabaseClient) {
+        supabaseClient.from('foods').insert([{
+          id: newFood.id, store_id: newFood.storeId, name: newFood.name,
+          price: newFood.price, category: newFood.category, description: newFood.description,
+          image: newFood.image, in_stock: newFood.inStock
+        }]).then(({ error }) => { if (error) console.error('Lỗi lưu món Cloud:', error); });
+      }
+
       showToast(`Đã đăng món "${name}" thành công!`);
+    }
+
+    function deleteFood(foodId) {
+      state.foods = state.foods.filter(x => x.id !== foodId);
+      saveState();
+      render();
+      if (supabaseClient) {
+        supabaseClient.from('foods').delete().eq('id', foodId).then();
+      }
+      showToast('Đã xóa món khỏi thực đơn.');
+    }
+
+    function toggleStoreOpen(storeId) {
+      const store = state.stores.find(s => s.id === storeId);
+      if (!store) return;
+      store.isOpen = !store.isOpen;
+      saveState();
+      render();
+      if (supabaseClient) {
+        supabaseClient.from('stores').update({ is_open: store.isOpen }).eq('id', storeId).then();
+      }
+      showToast(store.isOpen ? 'Quán đã mở bán trở lại!' : 'Quán đã chuyển sang tạm nghỉ.');
     }
 
     function initMap(containerId, onSelect) {
@@ -505,7 +637,7 @@
                       <b class="text-xs text-gray-900 truncate">${f.name}</b>
                       <p class="text-[11px] text-emerald-700 font-bold">${money(f.price)}</p>
                     </div>
-                    <button onclick="state.foods=state.foods.filter(x=>x.id!='${f.id}'); saveState(); render();" class="text-rose-600 text-xs font-bold px-2 py-1">Xóa</button>
+                    <button onclick="deleteFood('${f.id}')" class="text-rose-600 text-xs font-bold px-2 py-1">Xóa</button>
                   </div>
                 `).join('') : '<p class="text-xs text-gray-400 text-center py-4">Chưa có món nào. Bấm nút thêm món bên trên để bắt đầu bán!</p>'}
               </div>
@@ -638,6 +770,8 @@
     }
 
     render();
+    loadCloudData();
+    setupRealtimeSync();
   </script>
 </body>
 </html>
