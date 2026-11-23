@@ -195,6 +195,7 @@
         const okIds = new Set(state.stores.map(s => s.id)); state.foods = state.foods.filter(f => okIds.has(f.storeId));
         if (state.user) { state.profile.myStoreId = effStoreId(); if (state.profile.myStoreId) loadTableReqs(); }
         state.cloudLoaded = true;
+        detectNewOrders();
         saveState();
         render();
       } catch (err) {
@@ -212,9 +213,6 @@
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
           if (payload.eventType === 'UPDATE' && state.user && payload.new.customer_id === state.user.id) showToast('Đơn ' + payload.new.id + ': ' + (STATUS[payload.new.status] || [''])[0]);
           loadCloudData();
-          if (payload.eventType === 'INSERT' && payload.new.store_id === state.profile.myStoreId) {
-            notifyNewOrder(payload.new.id);
-          }
         })
         .subscribe();
     }
@@ -385,43 +383,102 @@
       state.stores.forEach(s => { if (!s.suspended && feeDue(s.id).some(isLate)) { setSuspended(s.id, true); c++; } });
       showToast(c ? 'Đã ẩn ' + c + ' quán quá hạn.' : 'Không có quán nào quá hạn.');
     }
-    let audioCtx; const BASE_TITLE = document.title;
-    function beep() {
+    // ===== CẢNH BÁO ĐƠN MỚI: chuông lặp · rung · thông báo hệ thống · huy hiệu biểu tượng · quét dự phòng =====
+    let audioCtx, wakeLock = null; const BASE_TITLE = document.title;
+    state.audioReady = false; state.ownerSec = ''; state.showDone = false; state.orderOpen = {};
+    state.wakeOn = (() => { try { return localStorage.getItem('fg_wake') === '1'; } catch { return false; } })();
+    const ownPending = () => { const sid = ownStoreId(); return sid ? state.orders.filter(o => o.storeId === sid && o.status === 'PENDING_CONFIRMATION') : []; };
+    function unlockAudio() {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const done = () => { if (audioCtx.state === 'running' && !state.audioReady) { state.audioReady = true; const b = document.getElementById('audioBanner'); if (b) b.remove(); } };
+        if (audioCtx.state === 'suspended') audioCtx.resume().then(done, () => {}); else done();
+      } catch {}
+    }
+    function beep() { // chuông "ding-dong" 3 nhịp, to và rõ
       try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         if (audioCtx.state === 'suspended') audioCtx.resume();
-        [0, 0.25, 0.5].forEach(t => { const o = audioCtx.createOscillator(), g = audioCtx.createGain(); o.frequency.value = 880; g.gain.value = 0.2; o.connect(g); g.connect(audioCtx.destination); o.start(audioCtx.currentTime + t); o.stop(audioCtx.currentTime + t + 0.15); });
+        const t0 = audioCtx.currentTime;
+        [[0, 988], [0.22, 1319], [0.7, 988], [0.92, 1319], [1.4, 988], [1.62, 1319]].forEach(([t, f]) => {
+          const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+          o.type = 'triangle'; o.frequency.value = f; o.connect(g); g.connect(audioCtx.destination);
+          g.gain.setValueAtTime(0.0001, t0 + t); g.gain.exponentialRampToValueAtTime(0.6, t0 + t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + 0.4);
+          o.start(t0 + t); o.stop(t0 + t + 0.45);
+        });
       } catch {}
     }
-    // Chỉ xin quyền hiện thông báo ĐÚNG 1 LẦN trên mỗi trình duyệt (dù khách bấm Cho phép, Chặn hay tắt cửa sổ)
-    function askNotifOnce() {
+    async function systemNotify(title, body, tag) {
       try {
-        if (!window.Notification || Notification.permission !== 'default') return;
-        if (localStorage.getItem('fg_notif_asked')) return;
-        localStorage.setItem('fg_notif_asked', '1');
-        Notification.requestPermission();
+        if (!window.Notification || Notification.permission !== 'granted') return;
+        const opt = { body, tag, renotify: true, requireInteraction: true, vibrate: [300, 150, 300, 150, 300], icon: 'icon-192.png', badge: 'icon-192.png' };
+        const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+        if (reg && reg.showNotification) reg.showNotification(title, opt); else new Notification(title, opt);
       } catch {}
+    }
+    function requestNotif() {
+      try {
+        if (!window.Notification) return showToast(isIOS ? 'iPhone chỉ nhận thông báo khi đã thêm app ra màn hình chính (Chia sẻ → Thêm vào MH chính).' : 'Trình duyệt này chưa hỗ trợ thông báo.');
+        Notification.requestPermission().then(r => { render(); if (r === 'granted') { systemNotify('ShopFood', 'Đã bật thông báo đơn mới.', 'test'); showToast('Đã bật thông báo.'); } });
+      } catch {}
+    }
+    function updateBadge() {
+      const n = ownPending().length;
+      try { if (navigator.setAppBadge) { if (n) navigator.setAppBadge(n); else navigator.clearAppBadge(); } } catch {}
+      document.title = n ? '🔴 (' + n + ') Đơn mới! · ' + BASE_TITLE : BASE_TITLE;
     }
     function toggleSound() {
       state.soundOn = !state.soundOn; try { localStorage.setItem('fg_sound', state.soundOn ? '1' : '0'); } catch {}
-      if (state.soundOn) { beep(); askNotifOnce(); }
+      if (state.soundOn) { unlockAudio(); beep(); }
       render();
     }
-    function notifyNewOrder(id) {
-      showToast('🔔 CÓ ĐƠN MỚI #' + id + '!');
-      if (state.soundOn) beep();
-      try { if (navigator.vibrate) navigator.vibrate([300, 150, 300]); if (window.Notification && Notification.permission === 'granted') new Notification('ShopFood: có đơn mới ' + id); } catch {}
-      document.title = '🔔 Đơn mới! ' + BASE_TITLE;
-    }
-    setInterval(() => { if (state.soundOn && pendingCount() > 0) beep(); }, 30000); // nhắc lại khi còn đơn chưa xác nhận
-    window.addEventListener('focus', () => { document.title = BASE_TITLE; });
-    document.addEventListener('pointerdown', () => {
+    async function applyWakeLock() {
       try {
-        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        if (state.soundOn && state.profile.myStoreId) askNotifOnce();
+        if (!('wakeLock' in navigator)) return;
+        if (state.wakeOn && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+        else if (!state.wakeOn && wakeLock) { await wakeLock.release(); wakeLock = null; }
       } catch {}
-    });
+    }
+    function toggleWake() {
+      if (!('wakeLock' in navigator)) return showToast('Thiết bị này chưa hỗ trợ giữ sáng màn hình.');
+      state.wakeOn = !state.wakeOn; try { localStorage.setItem('fg_wake', state.wakeOn ? '1' : '0'); } catch {}
+      applyWakeLock(); render(); showToast(state.wakeOn ? 'Màn hình sẽ luôn sáng khi mở app.' : 'Đã tắt giữ sáng màn hình.');
+    }
+    function notifyNewOrder(list) {
+      const arr = Array.isArray(list) ? list : [{ id: list }], f = arr[0];
+      const msg = arr.length === 1 ? 'Đơn ' + f.id + (f.total ? ' · ' + money(f.total) : '') : arr.length + ' đơn mới đang chờ';
+      showToast('🔔 CÓ ĐƠN MỚI: ' + msg);
+      if (state.soundOn) beep();
+      try { if (navigator.vibrate) navigator.vibrate([300, 150, 300, 150, 300]); } catch {}
+      systemNotify('🔔 ShopFood: có đơn mới', msg + '. Mở app để xác nhận.', 'new-order');
+    }
+    // So đơn chờ xác nhận với những đơn đã báo; đơn nào chưa báo thì báo ngay (cả khi quán vừa mở lại app)
+    function detectNewOrders() {
+      const sid = ownStoreId(); if (!sid) return;
+      const key = 'fg_seen_' + sid; let seen;
+      try { seen = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { seen = new Set(); }
+      const mine = state.orders.filter(o => o.storeId === sid);
+      const fresh = mine.filter(o => o.status === 'PENDING_CONFIRMATION' && !seen.has(o.id));
+      mine.forEach(o => seen.add(o.id));
+      try { localStorage.setItem(key, JSON.stringify([...seen].slice(-300))); } catch {}
+      if (fresh.length) notifyNewOrder(fresh);
+    }
+    // Quét dự phòng 15 giây/lần: nếu kết nối realtime bị rớt vẫn không sót đơn
+    async function pollOwnerOrders() {
+      const sid = ownStoreId(); if (!supabaseClient || !sid) return;
+      try {
+        const { data, error } = await supabaseClient.from('orders').select('id,status').eq('store_id', sid).eq('status', 'PENDING_CONFIRMATION').limit(50);
+        if (error || !data) return;
+        const local = state.orders.filter(o => o.storeId === sid && o.status === 'PENDING_CONFIRMATION' && !o.unsynced);
+        if (data.some(r => !local.some(o => o.id === r.id)) || local.some(o => !data.some(r => r.id === o.id))) loadCloudData();
+      } catch {}
+    }
+    setInterval(pollOwnerOrders, 15000);
+    setInterval(() => { if (state.soundOn && ownPending().length) beep(); }, 12000); // nhắc lại cho tới khi xác nhận
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollOwnerOrders(); if (state.wakeOn) applyWakeLock(); } });
+    window.addEventListener('online', pollOwnerOrders);
+    window.addEventListener('focus', updateBadge);
+    document.addEventListener('pointerdown', () => { unlockAudio(); if (state.wakeOn && !wakeLock) applyWakeLock(); });
     function storeInfoHtml() {
       const s = state.stores.find(x => x.id === (state.cart[0] || {}).storeId); if (!s) return '';
       return `<div class="bg-amber-50 rounded-xl p-3 text-[13px] space-y-1"><p><b>Giao hàng:</b> ${s.shipInfo || 'Hỏi quán khi đặt'}</p><p><b>Thanh toán:</b> ${s.payInfo || 'Thỏa thuận trực tiếp với quán'}</p><p class="text-gray-500">ShopFood chỉ kết nối. Phí giao và tiền món do bạn và quán thỏa thuận.</p></div>`;
@@ -430,29 +487,97 @@
       const s = state.stores.find(x => x.id === storeId); if (!s || !s.phone) return '';
       return `<span class="flex gap-1.5"><a href="tel:${s.phone}" class="border px-2 py-1 rounded-lg text-[13px] font-bold">📞 Gọi</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="border px-2 py-1 rounded-lg text-[13px] font-bold">Zalo</a></span>`;
     }
-    function storePanelsHtml(s) {
-      const n = storeMonths(s.id)[ymOf(Date.now())] || 0, next = [30, 100, 200, 400].find(t => n <= t), dues = feeDue(s.id).filter(d => !d.paid);
-      const card = 'bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm text-[13px]';
-      return `
-        ${s.suspended ? '<div class="rounded-xl bg-rose-100 text-rose-800 p-3 text-[13px] font-bold">⛔ Quán đang bị tạm ẩn vì quá hạn đóng phí. Đóng xong, quản trị sẽ mở lại.</div>' : ''}
-        ${tableRequestsHtml()}
-        ${profileCardHtml(s)}
-        ${appQrCardHtml()}
-        ${tablesCardHtml(s)}
-        <div class="${card} flex items-center justify-between"><span>🔔 Âm báo đơn mới: <b class="${state.soundOn ? 'text-emerald-700' : 'text-gray-500'}">${state.soundOn ? 'ĐANG BẬT' : 'đang tắt'}</b>${pendingCount() ? ` · <b class="text-rose-600">${pendingCount()} đơn chờ xác nhận</b>` : ''}</span><button onclick="toggleSound()" class="px-2.5 py-1 rounded-lg text-[13px] font-bold ${state.soundOn ? 'border border-gray-300 text-gray-600' : 'bg-amber-400 text-emerald-950'}">${state.soundOn ? 'Tắt' : 'Bật'}</button></div>
-        <div class="${card}">
-          <h3 class="font-extrabold text-sm text-gray-800">Phí dùng app</h3>
-          ${feeProgressHtml(n)}
-          ${dues.map(d => `<p class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${d.n} đơn, phí ${money(d.fee)}, hạn đóng ${d.due.toLocaleDateString('vi-VN')}</p>`).join('')}
-          ${dues.length ? `<p class="text-gray-500">Chuyển khoản: ${PLATFORM_PAY}</p>` : ''}
-          <p class="text-[13px] text-gray-400">0–30 đơn/tháng: miễn phí · 31–100: 99.000đ · 101–200: 199.000đ · 201–400: 349.000đ · trên 400: 499.000đ</p>
-        </div>
-        <div class="${card}">
-          <h3 class="font-extrabold text-sm text-gray-800">Giao hàng và nhận tiền</h3>
+    // ===== GIAO DIỆN CHỦ QUÁN: đơn hàng lên đầu · thực đơn gọn · cài đặt thu gọn =====
+    const orderTime = o => { const d = new Date(o.createdAt), t = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === new Date().toDateString() ? t : t + ' ' + d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }); };
+    function ownerOrderCard(o) {
+      const pend = o.status === 'PENDING_CONFIRMATION', done = isDone(o), open = !done || state.orderOpen[o.id];
+      const nx = NEXT[o.status], ph = String(o.customerPhone || '').trim();
+      const n = (o.items || []).reduce((a, i) => a + (i.quantity || 0), 0);
+      const call = ph ? `<a href="tel:${escQ(ph)}" class="flex-1 text-center border border-sky-300 text-sky-800 bg-white rounded-xl py-3 font-extrabold">📞 ${escQ(ph)}</a><a href="https://zalo.me/${escQ(normPhone(ph))}" target="_blank" class="px-4 text-center border border-gray-300 bg-white rounded-xl py-3 font-bold">Zalo</a>` : '';
+      return `<div class="rounded-2xl border-2 ${pend ? 'border-rose-400 bg-rose-50' : 'border-gray-100 bg-white'} p-3 space-y-2 shadow-sm text-[13px]">
+        <div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="font-black text-[14px] text-gray-900">${escQ(o.id)}</span><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${(STATUS[o.status] || [0, ''])[1]}">${(STATUS[o.status] || [o.status])[0]}</span></div><p class="text-gray-500 mt-0.5">🕒 ${orderTime(o)} · ${escQ(o.customerName || 'Khách')} · ${n} món</p></div><b class="text-[17px] text-emerald-700 shrink-0">${money(o.total)}</b></div>
+        ${done && !open ? `<button onclick="state.orderOpen['${o.id}']=true; render();" class="w-full text-center text-[13px] font-bold text-sky-700">Xem chi tiết ▼</button>` : `
+        ${call ? `<div class="flex gap-2">${call}</div>` : ''}
+        <div class="space-y-1">${orderBodyHtml(o)}</div>
+        ${done ? `<button onclick="state.orderOpen['${o.id}']=false; render();" class="w-full text-center text-[13px] font-bold text-gray-500">Thu gọn ▲</button>` : `
+        <div class="flex items-center gap-2 pt-1">${nx ? `<button onclick="setOrderStatus('${o.id}','${nx[0]}')" class="flex-1 ${pend ? 'bg-rose-600' : 'bg-emerald-700'} text-white rounded-xl py-3.5 text-[15px] font-black shadow">${pend ? '✅ ' : ''}${nx[1]}</button>` : ''}${['PENDING_CONFIRMATION', 'CONFIRMED'].includes(o.status) ? `<button onclick="if(confirm('Hủy đơn ${o.id}?')) setOrderStatus('${o.id}','CANCELLED')" class="px-4 border border-rose-300 text-rose-600 rounded-xl py-3 font-bold bg-white">Hủy</button>` : ''}</div>`}`}
+      </div>`;
+    }
+    function ownerOrdersHtml(orders) {
+      const t = o => new Date(o.createdAt).getTime() || 0;
+      const active = orders.filter(o => !isDone(o)).sort((a, b) => (b.status === 'PENDING_CONFIRMATION') - (a.status === 'PENDING_CONFIRMATION') || t(a) - t(b));
+      const done = orders.filter(isDone).sort((a, b) => t(b) - t(a)).slice(0, 30);
+      const pn = active.filter(o => o.status === 'PENDING_CONFIRMATION').length;
+      return `<section class="space-y-2.5">
+        <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🧾 Đơn hàng</h2><span class="text-[13px] text-gray-500">${pn ? `<b class="text-rose-600">${pn} chờ xác nhận</b> · ` : ''}${active.length} đang xử lý</span></div>
+        ${active.length ? active.map(ownerOrderCard).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có đơn nào đang xử lý.<br>Khi khách đặt món, đơn hiện ở đây kèm chuông báo.</div>'}
+        ${done.length ? `<button onclick="state.showDone=!state.showDone; render();" class="w-full bg-white border border-gray-200 rounded-2xl py-3 text-[14px] font-bold text-gray-700">${state.showDone ? '▲ Ẩn' : '▼ Xem'} đơn đã xong (${done.length})</button>${state.showDone ? done.map(ownerOrderCard).join('') : ''}` : ''}
+      </section>`;
+    }
+    function ownerAlertSetupHtml() {
+      const w = [];
+      if (!state.soundOn) w.push(['🔕 Chuông báo đơn đang tắt', 'Bật chuông', 'toggleSound()']);
+      if (window.Notification && Notification.permission === 'default') w.push(['📣 Chưa bật thông báo trên màn hình', 'Bật thông báo', 'requestNotif()']);
+      else if (window.Notification && Notification.permission === 'denied') w.push(['⛔ Thông báo đang bị chặn. Vào Cài đặt của trình duyệt, cho phép thông báo cho trang này.', '', '']);
+      else if (!window.Notification && isIOS && !isStandalone()) w.push(['📲 iPhone chỉ nhận thông báo khi đã thêm app ra màn hình chính.', 'Hướng dẫn', 'installApp()']);
+      const audio = state.soundOn && !state.audioReady ? `<button id="audioBanner" onclick="unlockAudio(); beep();" class="w-full bg-amber-400 text-emerald-950 rounded-2xl px-4 py-3 font-black text-[14px] shadow">👆 Chạm vào đây một lần để chuông báo đơn kêu</button>` : '';
+      return audio + (w.length ? `<div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 space-y-2">${w.map(x => `<div class="flex items-center justify-between gap-2 text-[13px] text-amber-900"><span class="font-bold">${x[0]}</span>${x[1] ? `<button onclick="${x[2]}" class="shrink-0 bg-emerald-700 text-white px-3 rounded-lg text-[13px] font-bold">${x[1]}</button>` : ''}</div>`).join('')}</div>` : '');
+    }
+    function ownerMenuHtml(foods) {
+      return `<section class="space-y-2.5">
+        <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🍽️ Thực đơn <span class="text-[13px] text-gray-400 font-bold">(${foods.length})</span></h2><button onclick="state.showFoodForm=true; render();" class="bg-emerald-700 text-white px-4 rounded-xl text-[13px] font-extrabold shadow">+ Thêm món</button></div>
+        ${foods.length ? `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">${foods.map(f => { const ed = state.editFoodId === f.id; return `<div class="p-2.5 space-y-2">
+          <div class="flex items-center gap-2.5"><img src="${f.image}" loading="lazy" class="w-14 h-14 rounded-xl object-cover shrink-0 ${f.inStock ? '' : 'grayscale'}" /><div class="flex-1 min-w-0"><b class="block text-[14px] text-gray-900 line-clamp-1">${escQ(f.name)}</b><span class="text-[14px] text-emerald-700 font-extrabold">${priceText(f)}</span>${f.note ? `<span class="ml-1.5 text-[13px] text-rose-600">· ${escQ(f.note)}</span>` : ''}</div>
+            <button onclick="toggleFoodStock('${f.id}')" class="shrink-0 h-10 px-3 rounded-xl text-[13px] font-extrabold ${f.inStock ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">${f.inStock ? 'Còn món' : 'Hết món'}</button>
+            <button onclick="state.editFoodId = ${ed ? "''" : "'" + f.id + "'"}; render();" class="shrink-0 w-10 h-10 rounded-xl border bg-white text-lg" aria-label="Sửa món">${ed ? '▲' : '⚙️'}</button></div>
+          ${ed ? `<div class="space-y-2 bg-gray-50 rounded-xl p-2.5">
+            <div class="grid grid-cols-2 gap-2"><label class="block space-y-1"><span class="text-[13px] font-bold">Danh mục</span><select onchange="setFoodCategory('${f.id}', this.value)" class="field">${catOptions(f.category)}</select></label>
+              <label class="block space-y-1"><span class="text-[13px] font-bold">Nhãn ghi chú</span><input value="${(f.note || '').replace(/"/g, '&quot;')}" onchange="setFoodNote('${f.id}', this.value)" maxlength="40" class="field" placeholder="VD: Đặt trước" /></label></div>
+            <label class="block space-y-1"><span class="text-[13px] font-bold">Size và giá</span><input value="${sizesToText(f.sizes)}" onchange="setFoodSizes('${f.id}', this.value)" class="field" placeholder="VD: M 25, L 30" /></label>
+            <p class="text-[13px] text-gray-600">${(f.groups || []).length ? groupsSummary(f.groups) : 'Chưa có tùy chọn (topping, đá, đường...)'}</p>
+            <div class="flex gap-2"><button onclick="openOptEditor('${f.id}')" class="flex-1 border-2 border-dashed border-emerald-400 text-emerald-700 rounded-xl py-2.5 text-[13px] font-extrabold bg-emerald-50">✏️ ${(f.groups || []).length ? 'Sửa' : 'Thêm'} tùy chọn</button><button onclick="deleteFood('${f.id}')" class="px-4 border border-rose-300 text-rose-600 rounded-xl text-[13px] font-bold bg-white">🗑 Xóa món</button></div></div>` : ''}</div>`; }).join('')}</div>`
+        : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có món nào. Bấm "+ Thêm món" để bắt đầu bán!</div>'}
+      </section>`;
+    }
+    function ownerSettingsHtml(s) {
+      const n = storeMonths(s.id)[ymOf(Date.now())] || 0, dues = feeDue(s.id).filter(d => !d.paid), card = 'bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm text-[13px]';
+      const sec = (key, icon, title, badge, body) => `<div class="space-y-2"><button onclick="state.ownerSec = state.ownerSec === '${key}' ? '' : '${key}'; render();" class="w-full flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm text-[14px] font-extrabold text-gray-800"><span>${icon} ${title}${badge || ''}</span><span class="text-gray-400 text-[13px]">${state.ownerSec === key ? '▲' : '▼'}</span></button>${state.ownerSec === key ? body() : ''}</div>`;
+      const row = (label, val, on, fn, btn) => `<div class="flex items-center justify-between gap-2"><div class="min-w-0"><b>${label}</b><p class="text-gray-500">${val}</p></div><button onclick="${fn}" class="shrink-0 h-10 px-3 rounded-xl font-extrabold text-[13px] ${on ? 'bg-emerald-100 text-emerald-900' : 'bg-gray-100 text-gray-700'}">${btn}</button></div>`;
+      const np = window.Notification ? Notification.permission : 'none';
+      return `<section class="space-y-2"><h2 class="font-extrabold text-[17px] text-gray-900 pt-1">⚙️ Quản lý quán</h2>
+        ${sec('alert', '🔔', 'Cảnh báo đơn mới', '', () => `<div class="${card}">
+          ${row('Chuông báo', state.soundOn ? 'Kêu lặp lại cho tới khi bạn xác nhận đơn' : 'Đang tắt', state.soundOn, 'toggleSound()', state.soundOn ? 'Đang bật' : 'Bật')}
+          ${row('Thử chuông', 'Nghe thử âm báo trên máy này', false, 'unlockAudio(); beep();', 'Nghe thử')}
+          ${row('Thông báo hệ thống', np === 'granted' ? 'Hiện cả khi bạn đang mở ứng dụng khác' : np === 'denied' ? 'Đang bị chặn trong trình duyệt' : np === 'none' ? 'Máy này chưa hỗ trợ' : 'Chưa bật', np === 'granted', np === 'default' ? 'requestNotif()' : "showToast('Hãy đổi quyền thông báo trong Cài đặt trình duyệt.')", np === 'granted' ? 'Đã bật' : 'Bật')}
+          ${row('Giữ sáng màn hình', 'Khuyên dùng khi để điện thoại hoặc máy tính bảng ở quầy', state.wakeOn, 'toggleWake()', state.wakeOn ? 'Đang bật' : 'Bật')}
+          <p class="text-gray-500 pt-1">Số đơn chờ xác nhận hiện trên biểu tượng app (khi đã thêm ra màn hình chính). Để nhận cảnh báo ổn định, hãy để app mở và đừng tắt hẳn trình duyệt.</p></div>`)}
+        ${sec('page', '🏪', 'Trang giới thiệu quán', '', () => profileCardHtml(s))}
+        ${sec('qr', '📱', 'Mã QR quán và bàn', '', () => appQrCardHtml() + tablesCardHtml(s))}
+        ${sec('ship', '🚚', 'Giao hàng và nhận tiền', '', () => `<div class="${card}">
           <label class="block space-y-1"><span class="font-bold">Cách giao và phí giao (bạn tự thỏa thuận với khách)</span><textarea oninput="state.shipEdit=this.value;" class="field" placeholder="VD: Giao trong thôn 10k, ngoài thôn 20k. Khách đến lấy miễn phí.">${state.shipEdit ?? s.shipInfo ?? ''}</textarea></label>
           <label class="block space-y-1"><span class="font-bold">Cách nhận tiền</span><textarea oninput="state.payEdit=this.value;" class="field" placeholder="VD: Tiền mặt khi nhận. Hoặc chuyển khoản STK ...">${state.payEdit ?? s.payInfo ?? ''}</textarea></label>
-          <button onclick="saveStoreInfo()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">Lưu thông tin</button>
-        </div>`;
+          <button onclick="saveStoreInfo()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">Lưu thông tin</button></div>`)}
+        ${sec('fee', '💳', 'Phí dùng app', dues.length ? ' <span class="text-rose-600">●</span>' : '', () => `<div class="${card}">${feeProgressHtml(n)}
+          ${dues.map(d => `<p class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${d.n} đơn, phí ${money(d.fee)}, hạn đóng ${d.due.toLocaleDateString('vi-VN')}</p>`).join('')}
+          ${dues.length ? `<p class="text-gray-500">Chuyển khoản: ${PLATFORM_PAY}</p>` : ''}
+          <p class="text-[13px] text-gray-400">0–30 đơn/tháng: miễn phí · 31–100: 99.000đ · 101–200: 199.000đ · 201–400: 349.000đ · trên 400: 499.000đ</p></div>`)}
+        ${sec('crm', '👥', 'Khách hàng của quán', '', () => `<div class="${card}">${crmHtml()}</div>`)}
+      </section>`;
+    }
+    function ownerTabHtml(s, foods, orders) {
+      const pn = ownPending().length;
+      return `${state.isAdmin && state.manageStoreId ? `<div class="rounded-2xl bg-sky-100 border border-sky-300 p-3 flex items-center justify-between gap-2"><b class="text-[13px] text-sky-900">🛠️ Admin đang quản lý quán: ${escQ(s.name)}</b><button onclick="exitManage()" class="px-3 rounded-xl bg-white border text-[13px] font-bold">Thoát</button></div>` : ''}
+        <div class="sticky top-0 z-30 -mx-3 px-3 py-2 bg-gray-50/95 backdrop-blur"><div class="flex items-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-2">
+          <img src="${s.image}" class="w-11 h-11 rounded-xl object-cover shrink-0" />
+          <div class="flex-1 min-w-0"><b class="block text-[15px] text-gray-900 line-clamp-1">${escQ(s.name)}</b><p class="text-[13px] ${pn ? 'text-rose-600 font-bold' : s.isOpen ? 'text-emerald-700' : 'text-gray-500'}">${pn ? '🔴 ' + pn + ' đơn chờ xác nhận' : s.isOpen ? '● Đang mở bán' : 'Đang tạm nghỉ'}</p></div>
+          <button onclick="toggleSound()" class="shrink-0 w-11 h-11 rounded-full text-xl ${state.soundOn ? 'bg-emerald-100' : 'bg-gray-100'}" aria-label="Bật tắt chuông báo">${state.soundOn ? '🔔' : '🔕'}</button>
+          <button onclick="toggleStoreOpen('${s.id}')" class="shrink-0 h-11 px-3.5 rounded-full font-extrabold text-[13px] ${s.isOpen ? 'bg-emerald-700 text-white' : 'bg-gray-200 text-gray-700'}">${s.isOpen ? 'Đang mở' : 'Đang nghỉ'}</button></div></div>
+        ${ownerAlertSetupHtml()}
+        ${s.suspended ? '<div class="rounded-xl bg-rose-100 text-rose-800 p-3 text-[13px] font-bold">⛔ Quán đang bị tạm ẩn vì quá hạn đóng phí. Đóng xong, quản trị sẽ mở lại.</div>' : ''}
+        ${tableRequestsHtml()}
+        ${ownerOrdersHtml(orders)}
+        ${ownerMenuHtml(foods)}
+        ${ownerSettingsHtml(s)}`;
     }
     function adminHtml() {
       const cur = ymOf(Date.now());
@@ -528,12 +653,12 @@
     // ===== CHI TIẾT ĐƠN HÀNG · GỬI ĐƠN LÊN CLOUD =====
     const toItems = v => { if (Array.isArray(v)) return v; try { const j = JSON.parse(v); return Array.isArray(j) ? j : []; } catch { return []; } };
     function orderBodyHtml(o) {
-      const items = (o.items || []).map(i => `<div class="flex justify-between text-gray-700"><span>${i.name} <span class="text-gray-400">× ${i.quantity} · ${money(i.unitPrice)}</span>${i.desc ? `<br><span class="text-[13px] text-gray-500">${String(i.desc).replace(/[<>]/g, '')}</span>` : ''}</span><b>${money(i.unitPrice * i.quantity)}</b></div>`).join('');
-      const how = o.fulfillmentMethod === 'DINEIN' ? '🍽️ Phục vụ tại ' + (o.deliveryAddress || 'bàn') : o.fulfillmentMethod === 'PICKUP' ? 'Khách tự đến lấy' + (o.pickupTime ? ' lúc ' + o.pickupTime : '') : 'Giao tận nơi: ' + (o.deliveryAddress || '');
+      const items = (o.items || []).map(i => `<div class="flex justify-between text-gray-700"><span>${escQ(i.name)} <span class="text-gray-400">× ${i.quantity} · ${money(i.unitPrice)}</span>${i.desc ? `<br><span class="text-[13px] text-gray-500">${String(i.desc).replace(/[<>]/g, '')}</span>` : ''}</span><b>${money(i.unitPrice * i.quantity)}</b></div>`).join('');
+      const how = o.fulfillmentMethod === 'DINEIN' ? '🍽️ Phục vụ tại ' + escQ(o.deliveryAddress || 'bàn') : o.fulfillmentMethod === 'PICKUP' ? 'Khách tự đến lấy' + (o.pickupTime ? ' lúc ' + escQ(o.pickupTime) : '') : 'Giao tận nơi: ' + escQ(o.deliveryAddress || '');
       return `${items}
         <div class="flex justify-between text-gray-500 pt-1 border-t border-dashed"><span>Tiền món</span><span>${money(o.subtotal || 0)}</span></div>
         <p class="text-[13px] text-gray-500">${how}</p>
-        ${o.customerNote ? `<p class="text-[13px] bg-amber-50 text-amber-800 rounded-lg p-2 whitespace-pre-line"><b>📝 Ghi chú của khách:</b> ${o.customerNote}</p>` : ''}
+        ${o.customerNote ? `<p class="text-[13px] bg-amber-50 text-amber-800 rounded-lg p-2 whitespace-pre-line"><b>📝 Ghi chú của khách:</b> ${escQ(o.customerNote)}</p>` : ''}
         <p class="text-[13px] text-gray-400">Phí giao (nếu có) và thanh toán do khách và quán thỏa thuận.</p>
         ${reviewHtml(o)}
         ${o.unsynced ? `<div class="flex items-center justify-between bg-rose-50 text-rose-700 rounded-lg p-2 text-[13px] font-bold"><span>⚠️ Đơn chưa gửi được tới quán</span><button onclick="syncOrder(state.orders.find(x => x.id === '${o.id}'), true)" class="bg-rose-600 text-white px-2 py-1 rounded-lg">Gửi lại</button></div>` : ''}`;
@@ -1529,70 +1654,7 @@
             </div>
           `;
         } else {
-          html += `
-            ${state.isAdmin && state.manageStoreId ? `<div class="rounded-2xl bg-sky-100 border border-sky-300 p-3 flex items-center justify-between gap-2"><b class="text-[13px] text-sky-900">🛠️ Admin đang quản lý quán: ${myStore.name}</b><button onclick="exitManage()" class="px-3 rounded-xl bg-white border text-[13px] font-bold">Thoát</button></div>` : ''}
-            ${storePanelsHtml(myStore)}
-            <div class="rounded-2xl bg-emerald-900 text-white p-4 space-y-2 shadow-sm">
-              <div class="flex justify-between items-start">
-                <div>
-                  <p class="text-[13px] text-emerald-200 font-bold">QUẢN LÝ GIAN HÀNG</p>
-                  <h2 class="font-black text-base mt-0.5">${myStore.name}</h2>
-                  <p class="text-[13px] text-emerald-100">${myStore.address} · SĐT: ${myStore.phone}</p>
-                </div>
-                <button onclick="toggleStoreOpen('${myStore.id}')" class="px-2.5 py-1 rounded-lg text-[13px] font-bold ${myStore.isOpen ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">
-                  ${myStore.isOpen ? 'Đang mở bán' : 'Tạm nghỉ'}
-                </button>
-              </div>
-            </div>
-
-            <div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm">
-              <div class="flex justify-between items-center">
-                <h3 class="font-extrabold text-sm text-gray-800">Thực đơn quán (${myStoreFoods.length})</h3>
-                <button onclick="state.showFoodForm=true; render();" class="bg-emerald-700 text-white px-3 py-2 rounded-xl text-[13px] font-bold">+ Đăng Món Siêu Tốc</button>
-              </div>
-              <div class="space-y-2">
-                ${myStoreFoods.length ? myStoreFoods.map(f => `
-                  <div class="flex items-center gap-2 border-t pt-2">
-                    <img src="${f.image}" class="w-12 h-12 rounded-lg object-cover" />
-                    <div class="flex-1 min-w-0">
-                      <b class="text-[13px] text-gray-900 truncate">${f.name}</b>
-                      <p class="text-[13px] text-emerald-700 font-bold">${priceText(f)}</p>
-                      <select onchange="setFoodCategory('${f.id}', this.value)" class="mt-1 border rounded-lg text-[13px] bg-white px-2">${catOptions(f.category)}</select>
-                      <input value="${(f.note || '').replace(/"/g, '&quot;')}" onchange="setFoodNote('${f.id}', this.value)" maxlength="40" class="field mt-1" placeholder="Nhãn ghi chú (VD: Đặt trước)" />
-                      <button onclick="state.editFoodId = state.editFoodId === '${f.id}' ? '' : '${f.id}'; render();" class="mt-1 w-full border rounded-lg text-[13px] font-bold text-emerald-700 bg-white">⚙️ Size · Tùy chọn món ${((f.sizes || []).length + (f.groups || []).length) ? '✓' : ''}</button>
-                      ${state.editFoodId === f.id ? `<div class="space-y-1 mt-1">
-                        <label class="block"><span class="text-[13px] font-bold">Size và giá</span><input value="${sizesToText(f.sizes)}" onchange="setFoodSizes('${f.id}', this.value)" class="field" placeholder="VD: M 25, L 30" /></label>
-                        <p class="text-[13px] text-gray-600">${(f.groups || []).length ? groupsSummary(f.groups) : 'Chưa có tùy chọn (topping, đá, đường...)'}</p>
-                        <button onclick="openOptEditor('${f.id}')" class="w-full border-2 border-dashed border-emerald-400 text-emerald-700 rounded-xl py-2.5 text-[13px] font-extrabold bg-emerald-50">✏️ ${(f.groups || []).length ? 'Sửa' : 'Thêm'} tùy chọn món</button>
-                      </div>` : ''}
-                    </div>
-                    <button onclick="toggleFoodStock('${f.id}')" class="px-2.5 rounded-lg text-[13px] font-bold ${f.inStock ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">${f.inStock ? 'Còn món' : 'Hết món'}</button>
-                    <button onclick="deleteFood('${f.id}')" class="text-rose-600 text-[13px] font-bold px-2 py-1">Xóa</button>
-                  </div>
-                `).join('') : '<p class="text-[13px] text-gray-400 text-center py-4">Chưa có món nào. Bấm nút thêm món bên trên để bắt đầu bán!</p>'}
-              </div>
-            </div>
-
-            <div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm">
-              <h3 class="font-extrabold text-sm text-gray-800">Đơn hàng của quán (${myStoreOrders.length})</h3>
-              ${myStoreOrders.length ? myStoreOrders.map(o => `
-                <div class="border-t pt-2 space-y-1 text-[13px]">
-                  <div class="flex justify-between font-bold"><span>${o.id} - ${o.customerName}</span><span class="text-emerald-700">${money(o.total)}</span></div>
-                  <p class="text-[13px] text-gray-500">SĐT: <a href="tel:${o.customerPhone}" class="text-sky-700 font-bold">${o.customerPhone}</a></p>
-                  ${orderBodyHtml(o)}
-                  <div class="flex items-center gap-1.5 pt-1">
-                    <span class="text-[13px] font-bold px-2 py-0.5 rounded ${(STATUS[o.status] || [0, ""])[1]}">${(STATUS[o.status] || [o.status])[0]}</span>
-                    ${NEXT[o.status] ? `<button onclick="setOrderStatus('${o.id}','${NEXT[o.status][0]}')" class="bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[13px] font-bold">${NEXT[o.status][1]}</button>` : ''}
-                    ${['PENDING_CONFIRMATION', 'CONFIRMED'].includes(o.status) ? `<button onclick="setOrderStatus('${o.id}','CANCELLED')" class="text-rose-600 text-[13px] font-bold px-2">Hủy</button>` : ''}
-                  </div>
-                </div>
-              `).join('') : '<p class="text-[13px] text-gray-400 text-center py-2">Chưa có đơn mới.</p>'}
-            </div>
-            <div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm">
-              <h3 class="font-extrabold text-sm text-gray-800">Khách hàng của quán</h3>
-              ${crmHtml()}
-            </div>
-          `;
+          html += ownerTabHtml(myStore, myStoreFoods, myStoreOrders);
         }
       }
 
@@ -1770,12 +1832,14 @@
         html += `<div class="fixed left-1/2 -translate-x-1/2 z-[70] w-max max-w-[92vw] text-center bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl text-[14px] font-bold" style="bottom: calc(env(safe-area-inset-bottom, 0px) + ${state.viewStoreId && state.cart.length ? 84 : 70}px)">✓ ${state.toast}</div>`;
       }
 
+      { const pn = ownPending().length; if (pn && state.activeTab !== 'mystore') html += `<button onclick="if (state.lockedStoreId) exitLockedStore(); else { state.viewStoreId=''; setTab('mystore'); }" class="fixed ${state.viewStoreId ? 'bottom-24' : 'top-2'} left-2 right-2 max-w-md mx-auto z-[65] bg-rose-600 text-white rounded-2xl px-4 py-3 shadow-2xl flex items-center justify-between font-extrabold text-[15px] animate-pulse"><span>🔔 ${pn} đơn mới chờ xác nhận</span><span class="bg-white text-rose-600 rounded-full px-3 py-1 text-[13px]">Xem ngay</span></button>`; }
       const sc = {}; document.querySelectorAll('[data-scroll]').forEach(el => sc[el.dataset.scroll] = [el.scrollTop, el.scrollLeft]); const wy = window.scrollY;
       const ae = document.activeElement, idx = [...app.querySelectorAll('input,textarea')].indexOf(ae);
       const sig = idx >= 0 ? [ae.tagName, ae.type, ae.placeholder, ae.selectionStart, ae.selectionEnd] : null;
       app.innerHTML = html;
       document.querySelectorAll('[data-scroll]').forEach(el => { const v = sc[el.dataset.scroll]; if (v) { el.scrollTop = v[0]; el.scrollLeft = v[1]; } });
       window.scrollTo(0, wy);
+      updateBadge();
       if (sig) {
         const el = app.querySelectorAll('input,textarea')[idx];
         if (el && el.tagName === sig[0] && el.type === sig[1] && el.placeholder === sig[2]) { el.focus({ preventScroll: true }); try { el.setSelectionRange(sig[3], sig[4]); } catch {} }
