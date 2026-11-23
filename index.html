@@ -621,7 +621,7 @@
     function updatePricePreview() {
       const el = document.getElementById('pricePreview'); if (!el) return;
       const v = parseShortPrice(state.foodForm.priceInput);
-      el.textContent = v > 0 ? 'Hiển thị: ' + money(v) : '';
+      el.textContent = v > 0 ? 'Khách sẽ thấy giá: ' + money(v) : 'Gõ 350 là 350.000đ, gõ 1500 là 1.500đ';
     }
 
     // ===== GIỎ HÀNG NHIỀU MÓN =====
@@ -1567,20 +1567,30 @@
     const attrQ = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     function openFoodEdit(id) {
       const f = state.foods.find(x => x.id === id); if (!f) return;
-      state.foodEdit = { id, name: f.name, priceInput: String(f.price % 1000 === 0 && f.price < 1000000 ? f.price / 1000 : f.price), category: f.category, description: f.description || '', image: f.image || '', note: f.note || '', sizes: sizesToText(f.sizes) };
+      const single = (f.sizes || []).length === 1, base = single ? f.sizes[0].price : f.price;
+      state.foodEdit = { id, name: f.name, priceInput: String(base % 1000 === 0 && base < 1000000 ? base / 1000 : base), category: f.category, description: f.description || '', image: f.image || '', note: f.note || '', sizes: single ? '' : sizesToText(f.sizes) };
       render();
     }
-    function updateEditPricePreview() {
-      const e = state.foodEdit, el = document.getElementById('editPricePreview'); if (!e || !el) return;
+    const editPriceInfo = e => {
       const sz = parseSizes(e.sizes), v = parseShortPrice(e.priceInput);
-      el.textContent = sz.length ? 'Có size nên giá hiển thị: từ ' + money(Math.min(...sz.map(x => x.price))) : (v > 0 ? 'Hiển thị: ' + money(v) : '');
+      if (sz.length >= 2) return { locked: true, text: 'Món có nhiều size nên giá lấy theo size: từ ' + money(Math.min(...sz.map(x => x.price))) + '. Muốn một giá duy nhất, hãy xóa trắng ô Size.' };
+      if (sz.length === 1) return { locked: false, text: 'Chỉ có 1 size nên món sẽ bán một giá: ' + money(sz[0].price) };
+      return { locked: false, text: v > 0 ? 'Khách sẽ thấy giá: ' + money(v) : 'Gõ 350 là 350.000đ, gõ 1500 là 1.500đ' };
+    };
+    function updateEditPricePreview() {
+      const e = state.foodEdit; if (!e) return;
+      const el = document.getElementById('editPricePreview'), inp = document.getElementById('editPrice'), i = editPriceInfo(e);
+      if (el) { el.textContent = i.text; el.className = 'text-[13px] font-bold ' + (parseShortPrice(e.priceInput) > 0 || i.locked ? 'text-green-700' : 'text-gray-500'); }
+      if (inp) { inp.disabled = i.locked; inp.classList.toggle('bg-gray-100', i.locked); inp.classList.toggle('text-gray-400', i.locked); }
     }
+    function fmtPriceField(v) { const n = parseInt(String(v).replace(/\D/g, ''), 10); return !n ? '' : n < 1000 ? String(n) : n.toLocaleString('vi-VN'); }
     function saveFoodEdit() {
       const e = state.foodEdit; if (!e) return;
       const f = state.foods.find(x => x.id === e.id); if (!f) { state.foodEdit = null; return render(); }
-      const name = cleanTxt(e.name, 80), sizes = parseSizes(e.sizes);
+      const name = cleanTxt(e.name, 80); let sizes = parseSizes(e.sizes);
       if ((e.sizes || '').trim() && !sizes.length) return showToast('Size nhập chưa đúng. Ví dụ: M 25, L 30');
       const price = sizes.length ? Math.min(...sizes.map(x => x.price)) : parseShortPrice(e.priceInput);
+      if (sizes.length === 1) sizes = [];
       if (!name) return showToast('Tên món không được để trống.');
       if (price <= 0) return showToast('Nhập giá tiền hợp lệ.');
       Object.assign(f, { name, price, sizes, category: e.category, description: String(e.description || '').trim().slice(0, 300), note: String(e.note || '').trim().slice(0, 40), image: e.image || f.image });
@@ -1598,8 +1608,9 @@
         <div data-scroll="foodedit" class="overflow-y-auto px-4 py-3 space-y-3">
           <div class="flex items-center gap-3"><img src="${attrQ(e.image)}" class="w-24 h-24 rounded-2xl object-cover border bg-gray-100 shrink-0" /><div class="flex-1 space-y-1"><span class="${lab}">Hình ảnh món</span><input type="file" accept="image/*" onchange="handleImageUpload(this, 500, url => state.foodEdit.image = url)" class="block w-full text-[13px] text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[13px] file:font-semibold file:bg-emerald-50 file:text-emerald-700" /></div></div>
           <label class="block space-y-1"><span class="${lab}">Tên món *</span><input value="${attrQ(e.name)}" oninput="state.foodEdit.name=this.value;" maxlength="80" class="field" /></label>
-          <label class="block space-y-1"><span class="${lab}">Giá bán (gõ tắt: 35 = 35.000đ) *</span><input value="${attrQ(e.priceInput)}" oninput="state.foodEdit.priceInput=this.value; updateEditPricePreview();" inputmode="numeric" class="field" placeholder="35" /><p id="editPricePreview" class="text-[13px] text-emerald-700 font-bold">${(() => { const sz = parseSizes(e.sizes), v = parseShortPrice(e.priceInput); return sz.length ? 'Có size nên giá hiển thị: từ ' + money(Math.min(...sz.map(x => x.price))) : (v > 0 ? 'Hiển thị: ' + money(v) : ''); })()}</p></label>
-          <label class="block space-y-1"><span class="${lab}">Size và giá (không bắt buộc)</span><input value="${attrQ(e.sizes)}" oninput="state.foodEdit.sizes=this.value; updateEditPricePreview();" class="field" placeholder="VD: M 25, L 30, XL 35" /><p class="text-[13px] text-gray-500">Có size thì giá món lấy theo size nhỏ nhất. Xóa trắng ô này nếu món chỉ có một giá.</p></label>
+          <label class="block space-y-1"><span class="${lab}">Giá bán *</span><div class="relative"><input id="editPrice" value="${attrQ(e.priceInput)}" ${editPriceInfo(e).locked ? 'disabled' : ''} oninput="state.foodEdit.priceInput=this.value; updateEditPricePreview();" onblur="state.foodEdit.priceInput=fmtPriceField(this.value); this.value=state.foodEdit.priceInput; updateEditPricePreview();" inputmode="numeric" class="field pr-12 text-[17px] font-bold ${editPriceInfo(e).locked ? 'bg-gray-100 text-gray-400' : ''}" placeholder="350" /><span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">đ</span></div>
+            <p id="editPricePreview" class="text-[13px] font-bold ${parseShortPrice(e.priceInput) > 0 || editPriceInfo(e).locked ? 'text-green-700' : 'text-gray-500'}">${editPriceInfo(e).text}</p></label>
+          <label class="block space-y-1"><span class="${lab}">Size và giá (không bắt buộc)</span><input value="${attrQ(e.sizes)}" oninput="state.foodEdit.sizes=this.value; updateEditPricePreview();" class="field" placeholder="VD: M 25, L 30, XL 35" /><p class="text-[13px] text-gray-500">Chỉ dùng khi món có từ 2 size trở lên. Món một giá thì để trống ô này.</p></label>
           <label class="block space-y-1"><span class="${lab}">Danh mục</span><select onchange="state.foodEdit.category=this.value" class="field">${catOptions(e.category)}</select></label>
           <div class="space-y-1.5"><label class="block space-y-1"><span class="${lab}">Nhãn ghi chú (không bắt buộc)</span><input value="${attrQ(e.note)}" oninput="state.foodEdit.note=this.value;" maxlength="40" class="field" placeholder="VD: Đặt trước 2H" /></label>
             <div class="flex flex-wrap gap-2">${['Đặt trước', 'Món mới', 'Cay', 'Buổi sáng'].map(t => `<button type="button" onclick="state.foodEdit.note='${t}'; render();" class="px-3 rounded-full border text-[13px] font-bold ${e.note === t ? 'bg-rose-100 border-rose-300 text-rose-700' : 'bg-white text-gray-600'}">${t}</button>`).join('')}${e.note ? `<button type="button" onclick="state.foodEdit.note=''; render();" class="px-3 rounded-full border text-[13px] font-bold text-gray-500 bg-white">Xóa nhãn</button>` : ''}</div></div>
@@ -1887,9 +1898,9 @@
                 <div class="space-y-1"><label class="block space-y-1"><span class="text-[13px] font-bold">Nhãn ghi chú (không bắt buộc)</span><input value="${(state.foodForm.note || '').replace(/"/g, '&quot;')}" oninput="state.foodForm.note=this.value;" maxlength="40" class="field" placeholder="VD: Đặt trước 7h sáng, Cay, Món mới" /></label>
                   <div class="flex flex-wrap gap-2">${['Đặt trước', 'Món mới', 'Cay', 'Buổi sáng'].map(t => `<button type="button" onclick="state.foodForm.note='${t}'; render();" class="px-3 rounded-full border text-[13px] font-bold ${state.foodForm.note === t ? 'bg-rose-100 border-rose-300 text-rose-700' : 'bg-white text-gray-600'}">${t}</button>`).join('')}</div></div>
                 <label class="block space-y-1">
-                  <span class="text-[13px] font-bold">Giá bán (Gõ tắt: 35 = 35.000đ) *</span>
+                  <span class="text-[13px] font-bold">Giá bán *</span>
                   <input value="${state.foodForm.priceInput}" oninput="state.foodForm.priceInput=this.value; updatePricePreview();" inputmode="numeric" class="field" placeholder="35" />
-                  <p id="pricePreview" class="text-[13px] text-emerald-700 font-bold">${parseShortPrice(state.foodForm.priceInput) > 0 ? 'Hiển thị: ' + money(parseShortPrice(state.foodForm.priceInput)) : ''}</p>
+                  <p id="pricePreview" class="text-[13px] text-green-700 font-bold">${parseShortPrice(state.foodForm.priceInput) > 0 ? 'Khách sẽ thấy giá: ' + money(parseShortPrice(state.foodForm.priceInput)) : 'Gõ 350 là 350.000đ, gõ 1500 là 1.500đ'}</p>
                 </label>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Size và giá (không bắt buộc)</span><input value="${(state.foodForm.sizes || '').replace(/"/g, '&quot;')}" oninput="state.foodForm.sizes=this.value; updateSizesPreview();" class="field" placeholder="VD: M 25, L 30, XL 35" /><p id="sizesPreview" class="text-[13px] text-emerald-700 font-bold">${sizesPreviewText(state.foodForm.sizes)}</p><p class="text-[13px] text-gray-500">Món có nhiều size: gõ tên size và giá, cách nhau bằng dấu phẩy. Khi có size, ô Giá bán ở trên được bỏ qua.</p></label>
                 <div class="space-y-1"><span class="text-[13px] font-bold">Tùy chọn cho khách (không bắt buộc)</span>
