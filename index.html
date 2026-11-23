@@ -154,7 +154,7 @@
       showMapPicker: false
     };
 
-    state.manageStoreId = ''; state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
+    state.storeCat = 'Tất cả'; state.storeInfoOpen = false; state.showStoreQR = false; state.manageStoreId = ''; state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
     let activeMapInstance = null;
     let activeMapMarker = null;
 
@@ -560,25 +560,66 @@
     }
 
     // ===== TRANG QUẢNG BÁ CỦA QUÁN: banner, logo, giới thiệu, giờ mở cửa =====
+    // ===== CHIA SẺ QUÁN: link + mã QR =====
+    async function shareStore(id) {
+      const st = state.stores.find(x => x.id === id); if (!st) return;
+      const url = tableLink(id), text = 'Mời bạn đặt món tại ' + st.name + ' trên ShopFood';
+      if (navigator.share) { try { await navigator.share({ title: st.name, text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      copyShareLink(id);
+    }
+    function copyShareLink(id) {
+      const url = tableLink(id);
+      try { navigator.clipboard.writeText(url).then(() => showToast('Đã sao chép link quán. Dán gửi cho người quen nhé!'), () => showToast(url)); } catch { showToast(url); }
+    }
+    function storeQrSheetHtml() {
+      const s = state.stores.find(x => x.id === state.viewStoreId); if (!s) return '';
+      const link = tableLink(s.id);
+      return `<div class="fixed inset-0 z-50 bg-black/60 flex items-end justify-center" onclick="state.showStoreQR=false; render();"><div class="bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3 shadow-2xl" onclick="event.stopPropagation()">
+        <div class="mx-auto h-1.5 w-12 rounded-full bg-gray-300"></div>
+        <div class="flex items-center justify-between"><h3 class="font-extrabold text-[16px]">Mã QR của quán</h3><button onclick="state.showStoreQR=false; render();" class="w-9 h-9 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
+        <div class="text-center space-y-1.5"><img src="${qrImg(link, 280)}" class="w-56 h-56 mx-auto border rounded-2xl p-1 bg-white" /><p class="font-extrabold text-[16px]">${s.name}</p><p class="text-[13px] text-gray-500">Người quen quét mã này là vào thẳng quán để chọn món và đặt hàng.</p></div>
+        <div class="flex gap-2"><button onclick="shareStore('${s.id}')" class="flex-1 bg-emerald-700 text-white rounded-xl py-3 font-extrabold text-[14px]">📤 Chia sẻ</button><button onclick="copyShareLink('${s.id}')" class="flex-1 border border-emerald-700 text-emerald-800 rounded-xl py-3 font-extrabold text-[14px]">🔗 Sao chép link</button></div>
+        <p class="text-[13px] text-gray-400 text-center">Nhấn giữ hình QR để lưu về máy.</p></div></div>`;
+    }
+
+    // ===== TRANG CỦA QUÁN (khách xem và đặt món) =====
     function storePageHtml() {
       const s = state.stores.find(x => x.id === state.viewStoreId); if (!s) return state.lockedStoreId ? lockedMissingHtml() : '';
-      const foods = state.foods.filter(f => f.storeId === s.id);
+      const all = state.foods.filter(f => f.storeId === s.id);
+      const cats = CATEGORIES.filter(c => all.some(f => f.category === c)).concat([...new Set(all.map(f => f.category))].filter(c => !CATEGORIES.includes(c)));
+      const cat = cats.includes(state.storeCat) ? state.storeCat : 'Tất cả';
+      const foods = cat === 'Tất cả' ? all : all.filter(f => f.category === cat);
       const n = state.cart.reduce((a, i) => a + i.quantity, 0), t = state.cart.reduce((a, i) => a + i.unitPrice * i.quantity, 0);
-      const row = (icon, label, val) => val ? `<div class="flex gap-2 text-[13px]"><span>${icon}</span><div><b>${label}</b><p class="text-gray-600">${val}</p></div></div>` : '';
-      return `<div class="fixed inset-0 z-40 bg-gray-50 overflow-y-auto" data-scroll="s0"><div class="max-w-md mx-auto pb-24">
-        <div class="relative h-44 bg-gradient-to-r from-emerald-800 to-teal-600">${s.cover ? `<img src="${s.cover}" class="w-full h-full object-cover" />` : ''}${state.lockedStoreId ? (state.profile.myStoreId === s.id ? `<button onclick="exitLockedStore()" class="absolute top-3 left-3 bg-white/90 rounded-full px-3 h-9 font-bold text-[13px] shadow">⚙️ Quản lý quán</button>` : '') : `<button onclick="closeStorePage()" class="absolute top-3 left-3 bg-white/90 rounded-full w-9 h-9 font-black shadow">‹</button>`}<button onclick="openCart()" class="absolute top-3 right-3 bg-white text-emerald-700 rounded-full pl-3 pr-2 flex items-center gap-1.5 font-extrabold shadow-md text-[14px]">🛒 Giỏ hàng <span class="bg-emerald-700 text-white rounded-full min-w-[26px] h-[26px] px-1 flex items-center justify-center text-[13px] font-black">${cartCount()}</span></button></div>
-        <div class="px-4 -mt-10 relative">
-          <div class="flex items-end gap-3"><img src="${s.image}" class="w-20 h-20 rounded-2xl object-cover border-4 border-white shadow" /><div class="pb-1"><h2 class="font-black text-lg text-gray-900 leading-tight">${s.name}</h2><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${s.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}">${s.isOpen ? 'Đang mở cửa' : 'Tạm nghỉ'}</span><p class="text-[13px] text-amber-600 font-bold mt-1">${ratingText(s.id)}</p></div></div>
-          ${s.slogan ? `<p class="mt-3 text-sm font-bold text-emerald-800">${s.slogan}</p>` : ''}
-          ${s.about ? `<p class="mt-1 text-[13px] text-gray-600 whitespace-pre-line">${s.about}</p>` : ''}
-          <div class="mt-3 bg-white rounded-2xl border p-3 space-y-2">${row('🕒', 'Giờ mở cửa', s.openHours)}${row('📍', 'Địa chỉ', s.address)}${row('🚚', 'Giao hàng', s.shipInfo || 'Hỏi quán khi đặt')}${row('💵', 'Thanh toán', s.payInfo || 'Thỏa thuận với quán')}
-            ${s.phone ? `<div class="flex gap-2 pt-1"><a href="tel:${s.phone}" class="flex-1 text-center border rounded-xl py-2 text-[13px] font-bold">📞 Gọi quán</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="flex-1 text-center border rounded-xl py-2 text-[13px] font-bold">💬 Zalo</a></div>` : ''}</div>
-          ${state.lastOrderIds.length ? `<div class="mt-3 rounded-2xl bg-emerald-50 border border-emerald-200 p-3 space-y-2"><div class="flex justify-between items-start"><b class="text-[14px] text-emerald-900">✓ Đã gửi đơn ${state.lastOrderIds.join(', ')} tới quán</b><button onclick="state.lastOrderIds=[]; render();" class="text-gray-400 font-bold px-1" aria-label="Đóng">✕</button></div><p class="text-[13px] text-gray-600">Quán sẽ xác nhận và liên hệ qua số điện thoại bạn đã nhập.</p><button onclick="state.viewStoreId=''; setTab('orders');" class="w-full border rounded-xl py-2.5 text-[13px] font-bold bg-white text-emerald-800">📋 Xem đơn của tôi</button></div>` : ''}
+      const clamp = state.storeInfoOpen ? '' : 'line-clamp-2';
+      const row = (icon, label, val) => val ? `<div class="flex gap-2.5 text-[13px]"><span class="w-5 text-center shrink-0">${icon}</span><div class="min-w-0 flex-1"><span class="text-gray-400 font-bold">${label}</span><p class="text-gray-700 ${clamp}">${val}</p></div></div>` : '';
+      const meta = f => { const x = state.foodStats[f.id], p = []; if (x && x.cnt) p.push('⭐ ' + x.avg.toFixed(1) + ' (' + x.cnt + ')'); if (x && x.orders) p.push('🛒 ' + x.orders + ' đơn'); return p.join(' · '); };
+      const act = 'flex flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-white py-2 text-[13px] font-bold text-gray-700';
+      const rating = state.ratings[s.id], rt = rating && rating.cnt ? `<span class="text-[13px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">⭐ ${rating.avg.toFixed(1)} (${rating.cnt})</span>` : '<span class="text-[13px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Quán mới</span>';
+      const back = state.lockedStoreId ? (state.profile.myStoreId === s.id ? `<button onclick="exitLockedStore()" class="bg-white/95 rounded-full px-3 h-11 font-bold text-[13px] shadow">⚙️ Quản lý quán</button>` : '<span></span>') : `<button onclick="closeStorePage()" class="bg-white/95 rounded-full w-11 h-11 text-xl font-black shadow" aria-label="Quay lại">‹</button>`;
+      return `<div class="fixed inset-0 z-40 bg-gray-50 overflow-y-auto" data-scroll="s0"><div class="max-w-md mx-auto pb-28">
+        <div class="relative h-40 bg-gradient-to-r from-emerald-800 to-teal-600 overflow-hidden">${s.cover ? `<img src="${s.cover}" class="absolute inset-0 w-full h-full object-cover" />` : ''}<div class="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/20"></div>
+          <div class="absolute top-3 left-3 right-3 flex items-center justify-between">${back}<button onclick="openCart()" class="bg-white text-emerald-700 rounded-full pl-3 pr-1.5 flex items-center gap-1.5 font-extrabold shadow-md text-[14px]">🛒 Giỏ hàng <span class="bg-emerald-700 text-white rounded-full min-w-[26px] h-[26px] px-1 flex items-center justify-center text-[13px] font-black">${cartCount()}</span></button></div></div>
+        <div class="px-3 -mt-12 relative space-y-3">
+          <div class="bg-white rounded-2xl shadow-md border border-gray-100 p-3 space-y-3">
+            <div class="flex gap-3 items-center"><img src="${s.image}" class="w-16 h-16 rounded-2xl object-cover shadow shrink-0" /><div class="min-w-0 flex-1"><h2 class="font-black text-[18px] text-gray-900 leading-tight">${s.name}</h2><div class="flex flex-wrap items-center gap-1.5 mt-1"><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${s.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}">${s.isOpen ? '● Đang mở cửa' : 'Tạm nghỉ'}</span>${rt}</div></div></div>
+            ${s.slogan ? `<p class="text-[14px] font-bold text-emerald-800 leading-snug">${s.slogan}</p>` : ''}
+            ${s.about ? `<p class="text-[13px] text-gray-600 whitespace-pre-line ${clamp}">${s.about}</p>` : ''}
+            <div class="grid ${s.phone ? 'grid-cols-4' : 'grid-cols-2'} gap-2">
+              ${s.phone ? `<a href="tel:${s.phone}" class="${act}"><span class="text-lg leading-none">📞</span>Gọi</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="${act}"><span class="text-lg leading-none">💬</span>Zalo</a>` : ''}
+              <button onclick="shareStore('${s.id}')" class="${act}"><span class="text-lg leading-none">📤</span>Chia sẻ</button>
+              <button onclick="state.showStoreQR=true; render();" class="${act}"><span class="text-lg leading-none">▦</span>Mã QR</button>
+            </div>
+          </div>
+          <div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2.5">${row('🕒', 'Giờ mở cửa', s.openHours)}${row('📍', 'Địa chỉ', s.address)}${row('🚚', 'Giao hàng', s.shipInfo || 'Hỏi quán khi đặt')}${row('💵', 'Thanh toán', s.payInfo || 'Thỏa thuận với quán')}
+            <button onclick="state.storeInfoOpen=!state.storeInfoOpen; render();" class="w-full text-center text-[13px] font-bold text-emerald-700">${state.storeInfoOpen ? 'Thu gọn ▲' : 'Xem đầy đủ ▼'}</button></div>
+          ${state.lastOrderIds.length ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 space-y-2"><div class="flex justify-between items-start"><b class="text-[14px] text-emerald-900">✓ Đã gửi đơn ${state.lastOrderIds.join(', ')} tới quán</b><button onclick="state.lastOrderIds=[]; render();" class="text-gray-400 font-bold px-1" aria-label="Đóng">✕</button></div><p class="text-[13px] text-gray-600">Quán sẽ xác nhận và liên hệ qua số điện thoại bạn đã nhập.</p><button onclick="state.viewStoreId=''; setTab('orders');" class="w-full border rounded-xl py-2.5 text-[13px] font-bold bg-white text-emerald-800">📋 Xem đơn của tôi</button></div>` : ''}
           ${state.tableCtx && state.tableCtx.storeId === s.id ? tableBarHtml() : ''}
-          <h3 class="mt-4 mb-2 font-extrabold text-sm">Thực đơn (${foods.length} món)</h3>
-          <div class="space-y-2.5">${foods.length ? foods.map(f => `<div class="bg-white rounded-xl border border-gray-100 p-2.5 flex gap-3 shadow-sm items-center ${f.inStock ? '' : 'opacity-50'}"><img src="${f.image}" class="w-16 h-16 rounded-lg object-cover" /><div class="flex-1 min-w-0"><b class="text-[13px] text-gray-900 line-clamp-1">${f.name}</b>${noteChip(f.note)}<p class="text-[13px] text-gray-500 line-clamp-1 mt-0.5">${f.description || f.category}</p><p class="text-[13px] mt-0.5"><span class="text-amber-600 font-bold">${foodRating(f.id)}</span> · <span class="text-gray-500">${foodOrders(f.id)}</span></p><p class="text-[13px] font-extrabold text-emerald-700 mt-1">${priceText(f)}</p></div>${cartQtyHtml(f.id)}</div>`).join('') : '<p class="text-[13px] text-gray-400 text-center py-6">Quán chưa đăng món.</p>'}</div>
+          <div class="flex items-end justify-between pt-1"><h3 class="font-extrabold text-[16px] text-gray-900">Thực đơn</h3><span class="text-[13px] text-gray-400">${all.length} món</span></div>
+          ${cats.length > 1 ? `<div data-scroll="storecats" class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">${['Tất cả', ...cats].map(c => `<button onclick="state.storeCat='${c}'; render();" class="shrink-0 px-4 rounded-full border text-[14px] font-bold ${cat === c ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-gray-200 text-gray-700'}">${c}</button>`).join('')}</div>` : ''}
+          <div class="space-y-2.5">${foods.length ? foods.map(f => { const m = meta(f); return `<div class="bg-white rounded-2xl border border-gray-100 p-2.5 flex gap-3 shadow-sm items-center ${f.inStock ? '' : 'opacity-50'}"><img src="${f.image}" loading="lazy" class="w-[76px] h-[76px] rounded-xl object-cover shrink-0" /><div class="flex-1 min-w-0 flex flex-col gap-0.5"><b class="text-[14px] text-gray-900 leading-snug line-clamp-2">${f.name}</b>${noteChip(f.note)}${f.description ? `<p class="text-[13px] text-gray-500 line-clamp-1">${f.description}</p>` : ''}${m ? `<p class="text-[13px] text-gray-500">${m}</p>` : ''}<p class="text-[15px] font-extrabold text-emerald-700">${priceText(f)}</p></div>${cartQtyHtml(f.id)}</div>`; }).join('') : '<p class="text-[13px] text-gray-400 text-center py-6">Chưa có món trong mục này.</p>'}</div>
+          <div class="rounded-2xl bg-orange-50 border border-orange-200 p-3 flex items-center gap-3"><p class="flex-1 text-[13px] text-gray-700"><b>Thấy ngon?</b> Chia sẻ quán cho người quen để cùng đặt nhé.</p><button onclick="shareStore('${s.id}')" class="shrink-0 bg-emerald-700 text-white px-4 rounded-full text-[13px] font-extrabold">📤 Chia sẻ</button></div>
         </div>
-        ${n ? `<div class="fixed left-0 right-0 bottom-0 z-40 max-w-md mx-auto p-3 space-y-2"><button onclick="startCheckout()" class="w-full bg-amber-400 text-emerald-950 rounded-2xl px-4 py-3 shadow-lg text-sm font-black">${state.tableCtx ? '🍽️ Gửi món cho quán' : '⚡ Đặt ngay'} · ${n} món · ${money(t)}</button></div>` : ''}
+        ${n ? `<div class="fixed left-0 right-0 bottom-0 z-40 max-w-md mx-auto p-3"><button onclick="startCheckout()" class="w-full bg-amber-400 text-emerald-950 rounded-2xl px-4 py-3.5 shadow-lg text-[15px] font-black">${state.tableCtx ? '🍽️ Gửi món cho quán' : '⚡ Đặt ngay'} · ${n} món · ${money(t)}</button></div>` : ''}
       </div></div>`;
     }
     function lockedMissingHtml() {
@@ -1588,6 +1629,7 @@
       `;
 
       if (state.viewStoreId) html += storePageHtml();
+      if (state.showStoreQR && state.viewStoreId) html += storeQrSheetHtml();
       if (state.sizePick) html += sizePickerHtml();
       if (state.optEdit) html += optEditorHtml();
       if (state.showInstallHelp) html += installHelpHtml();
