@@ -1401,7 +1401,7 @@
       let html = `
         ${state.activeTab === 'home' ? heroBannerHtml() : ''}
         <!-- HEADER -->
-        <header class="sticky top-0 z-30 bg-white text-gray-900 shadow-md">
+        ${state.activeTab === 'home' ? `<header class="sticky top-0 z-30 bg-white text-gray-900 shadow-md">
           <div class="px-4 py-2 space-y-1.5">
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-2.5 min-w-0">
@@ -1421,10 +1421,10 @@
             </div>
             ${state.isListening ? '<p class="text-[13px] text-rose-600 font-bold text-center">🎙️ Đang nghe... hãy nói tên món bạn muốn (bấm micro để dừng)</p>' : ''}` : ''}
           </div>
-        </header>
+        </header>` : ''}
 
         <!-- MAIN CONTENT (4 TABS) -->
-        <main class="px-3 pt-3 space-y-4">
+        <main class="px-3 ${state.activeTab === 'home' ? 'pt-3' : 'pt-5'} space-y-4">
       `;
 
       // TAB 1: TRANG CHỦ
@@ -1745,3 +1745,4 @@
   </script>
 </body>
 </html>
+  
