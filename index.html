@@ -247,6 +247,8 @@
     const clean = v => typeof v === 'string' ? v.replace(/[<>"'`\\]/g, '') : Array.isArray(v) ? v.map(clean)
       : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v;
     const normPhone = p => { let d = String(p || '').replace(/\D/g, ''); return d.startsWith('84') ? '0' + d.slice(2) : d; };
+    const hasAccount = () => !!(state.user && state.user.email);
+    function requireAccount() { if (!supabaseClient || hasAccount()) return true; state.showAuth = true; render(); return false; }
     function requireLogin() {
       if (!supabaseClient || state.user) return true;
       return true; // khách đặt món không cần đăng nhập, phiên ẩn danh được tạo khi bấm chốt đơn
@@ -260,10 +262,21 @@
       if (!isMail && !AUTH_MAILBOX) return showToast('Chủ app chưa cài đặt đăng nhập bằng số điện thoại. Tạm thời hãy dùng email.');
       const cred = { email: isMail ? id.toLowerCase() : phoneEmail(phone), password: state.authPass };
       const { data, error } = state.authMode === 'login' ? await supabaseClient.auth.signInWithPassword(cred) : await supabaseClient.auth.signUp(cred);
-      if (error) return showToast(/Invalid login/i.test(error.message) ? 'Sai mật khẩu, hoặc số điện thoại này chưa đăng ký. Nếu chưa có, bấm Tạo mới.' : /already registered/i.test(error.message) ? 'Số điện thoại này đã đăng ký rồi. Hãy bấm Đăng nhập.' : 'Lỗi: ' + error.message);
-      if (!data.session) return showToast('Số điện thoại này đã đăng ký rồi? Hãy bấm Đăng nhập.');
+      if (error) {
+        const m = error.message || '';
+        return showToast(/not confirmed/i.test(m) ? 'Tài khoản chưa được xác nhận. Chủ app cần tắt "Confirm email" trong Supabase.'
+          : /Invalid login/i.test(m) ? 'Sai mật khẩu, hoặc số điện thoại này chưa đăng ký. Nếu chưa có, bấm Tạo mới.'
+          : /already registered/i.test(m) ? 'Số điện thoại này đã đăng ký rồi. Hãy bấm Đăng nhập.'
+          : /rate limit|too many/i.test(m) ? 'Hệ thống đang giới hạn số lần gửi. Chủ app cần tắt "Confirm email" trong Supabase rồi thử lại sau ít phút.'
+          : /signups? (not allowed|.*disabled)|disabled/i.test(m) ? 'Supabase đang tắt đăng ký tài khoản mới. Chủ app cần bật "Allow new users to sign up".'
+          : 'Lỗi: ' + m);
+      }
+      if (!data.session) {
+        const dup = data.user && data.user.identities && data.user.identities.length === 0;
+        return showToast(dup ? 'Số điện thoại này đã đăng ký rồi. Hãy bấm Đăng nhập.' : 'Đã tạo tài khoản nhưng Supabase đang yêu cầu xác nhận email. Chủ app cần tắt "Confirm email" trong Supabase.');
+      }
       if (!isMail) state.profile.phone = phone; state.showAuth = false; state.authPass = ''; saveState();
-      showToast('Đã đăng nhập. Bấm đặt món lại để tiếp tục!');
+      showToast(state.authMode === 'login' ? 'Đã đăng nhập.' : 'Đã tạo tài khoản. Bạn đã đăng nhập.');
     }
     function setOrderStatus(id, status) {
       const o = state.orders.find(x => x.id === id); if (!o) return;
@@ -1414,7 +1427,7 @@
               <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto text-xl">🏪</div>
               <h3 class="font-extrabold text-sm text-gray-900">Bạn chưa có cửa hàng trên ShopFood</h3>
               <p class="text-[13px] text-gray-500">Tạo gian hàng riêng của bạn chỉ với 30 giây để bắt đầu nhận đơn từ khách hàng quanh bạn.</p>
-              <button onclick="if (requireLogin()) { state.showStoreForm=true; render(); }" class="bg-amber-400 text-emerald-950 px-5 py-3 rounded-xl text-[13px] font-black shadow-md">
+              <button onclick="if (requireAccount()) { state.showStoreForm=true; render(); }" class="bg-amber-400 text-emerald-950 px-5 py-3 rounded-xl text-[13px] font-black shadow-md">
                 ✨ Đăng Ký Tạo Cửa Hàng Ngay
               </button>
             </div>
@@ -1493,13 +1506,13 @@
         html += `
           <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
             <h2 class="font-extrabold text-base text-gray-900">Thông tin tài khoản</h2>
-            ${state.user ? `<p class="text-[13px] text-gray-500">${accLoginLabel()}</p>` : '<p class="text-[13px] text-amber-700 font-bold">Chưa đăng nhập. Hãy đăng nhập để thông tin được lưu theo tài khoản.</p>'}
+            ${hasAccount() ? `<p class="text-[13px] text-gray-500">${accLoginLabel()}</p>` : '<p class="text-[13px] text-amber-700 font-bold">Bạn đang đặt món không cần tài khoản. Tạo tài khoản bằng số điện thoại để lưu thông tin và lịch sử đơn.</p>'}
             ${accEditing() ? `<label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Họ và tên</span><input value="${state.profile.name}" oninput="state.profile.name=this.value;" class="field" placeholder="Nhập họ và tên" /></label>
             <label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Số điện thoại / Zalo</span><input value="${state.profile.phone}" oninput="state.profile.phone=this.value;" class="field" placeholder="09xxxxxxxx" inputmode="tel" /></label>
             <label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Địa chỉ giao hàng</span><textarea oninput="state.profile.address=this.value;" class="field min-h-16" placeholder="Thôn, Xóm, Số nhà...">${state.profile.address || ''}</textarea></label>
             <button onclick="saveProfile()" class="w-full bg-emerald-700 text-white py-3 rounded-xl text-[13px] font-extrabold">Lưu thông tin</button>
             ${state.user && state.profile.name && state.profile.phone ? '<button onclick="cancelAccEdit()" class="w-full border py-3 rounded-xl text-[13px] font-bold text-gray-600">Hủy</button>' : ''}` : accViewHtml()}
-            ${state.user ? `<div class="bg-emerald-50 rounded-xl p-3 text-[13px]"><b class="text-emerald-800">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</b><p class="text-gray-500 mt-1">1 điểm cho mỗi 1.000đ đơn hoàn tất. Bạc từ 100 điểm, Vàng từ 300.</p></div><button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border py-3 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button>` : '<button onclick="state.showAuth=true; render();" class="w-full bg-amber-400 text-emerald-950 py-3 rounded-xl text-[13px] font-extrabold">Đăng nhập / Tạo tài khoản</button>'}
+            ${hasAccount() ? `<div class="bg-emerald-50 rounded-xl p-3 text-[13px]"><b class="text-emerald-800">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</b><p class="text-gray-500 mt-1">1 điểm cho mỗi 1.000đ đơn hoàn tất. Bạc từ 100 điểm, Vàng từ 300.</p></div><button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border py-3 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button>` : '<button onclick="state.showAuth=true; render();" class="w-full bg-amber-400 text-emerald-950 py-3 rounded-xl text-[13px] font-extrabold">Đăng nhập / Tạo tài khoản</button>'}
             ${installCardHtml()}
           </div>
         `;
