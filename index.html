@@ -154,7 +154,7 @@
       showMapPicker: false
     };
 
-    state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
+    state.manageStoreId = ''; state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
     let activeMapInstance = null;
     let activeMapMarker = null;
 
@@ -193,7 +193,7 @@
         state.stores = clean(state.stores); state.foods = clean(state.foods); state.orders = clean(state.orders); const cloudIds = new Set(state.orders.map(o => o.id)); state.orders = [...keepLocal.filter(o => !cloudIds.has(o.id)), ...state.orders];
         state.stores = state.stores.filter(s => !s.suspended || state.isAdmin || (state.user && s.ownerId === state.user.id));
         const okIds = new Set(state.stores.map(s => s.id)); state.foods = state.foods.filter(f => okIds.has(f.storeId));
-        if (state.user) { const mine = state.stores.find(s => s.ownerId === state.user.id); state.profile.myStoreId = mine ? mine.id : ''; if (state.profile.myStoreId) loadTableReqs(); }
+        if (state.user) { state.profile.myStoreId = effStoreId(); if (state.profile.myStoreId) loadTableReqs(); }
         state.cloudLoaded = true;
         saveState();
         render();
@@ -237,7 +237,9 @@
     const AUTH_DOMAIN = 'foodgo-local.vn'; // chỉ dự phòng khi chưa điền AUTH_MAILBOX (tên miền này Supabase sẽ từ chối)
     const phoneEmail = ph => AUTH_MAILBOX ? AUTH_MAILBOX.replace(/@.*$/, '') + '+' + ph + '@gmail.com' : ph + '@' + AUTH_DOMAIN;
     const phoneFromEmail = em => { const m = String(em || '').match(/\+(0\d{9,10})@gmail\.com$/); return m ? m[1] : ''; };
-    const accLoginLabel = () => { const e = state.user && state.user.email, ph = phoneFromEmail(e); return ph ? 'Đăng nhập bằng số điện thoại: <b>' + ph + '</b>' : e ? 'Đăng nhập bằng email: <b>' + e + '</b>' : 'Khách chưa tạo tài khoản'; };
+    const userEmail = u => AUTH_MAILBOX ? AUTH_MAILBOX.replace(/@.*$/, '') + '+u_' + u + '@gmail.com' : 'u_' + u + '@' + AUTH_DOMAIN;
+    const userFromEmail = em => { const m = String(em || '').match(/\+u_([a-z][a-z0-9_]{2,19})@gmail\.com$/); return m ? m[1] : ''; };
+    const accLoginLabel = () => { const e = state.user && state.user.email, ph = phoneFromEmail(e), un = userFromEmail(e); return (ph ? 'Đăng nhập bằng số điện thoại: <b>' + ph + '</b>' : un ? 'Đăng nhập bằng tên: <b>' + un + '</b>' : e ? 'Đăng nhập bằng email: <b>' + e + '</b>' : 'Khách chưa tạo tài khoản') + (state.isAdmin ? ' · <b class="text-sky-700">🛠️ Quản trị viên</b>' : ''); };
     const STATUS = {
       PENDING_CONFIRMATION: ['Chờ quán xác nhận', 'bg-amber-100 text-amber-800'],
       CONFIRMED: ['Quán đang chuẩn bị', 'bg-sky-100 text-sky-800'],
@@ -251,6 +253,28 @@
       : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, clean(x)])) : v;
     const normPhone = p => { let d = String(p || '').replace(/\D/g, ''); return d.startsWith('84') ? '0' + d.slice(2) : d; };
     const hasAccount = () => !!(state.user && state.user.email);
+    const ownStoreId = () => { const m = state.user && state.stores.find(x => x.ownerId === state.user.id); return m ? m.id : ''; };
+    const effStoreId = () => (state.isAdmin && state.manageStoreId && state.stores.some(x => x.id === state.manageStoreId)) ? state.manageStoreId : ownStoreId();
+    function manageStore(id) {
+      if (!state.isAdmin) return;
+      state.manageStoreId = id; state.profile.myStoreId = id; state.tableOpen = []; state.storeEdit = null; state.profileEditing = undefined; state.editFoodId = ''; state.activeTab = 'mystore';
+      loadTableReqs(); render(); window.scrollTo(0, 0);
+    }
+    function exitManage() {
+      state.manageStoreId = ''; state.profile.myStoreId = ownStoreId(); state.tableOpen = []; state.storeEdit = null; state.profileEditing = undefined; state.editFoodId = '';
+      state.activeTab = state.isAdmin ? 'admin' : 'home'; if (state.profile.myStoreId) loadTableReqs(); render();
+    }
+    function deleteStore(id) {
+      if (!state.isAdmin || !supabaseClient) return;
+      const st = state.stores.find(x => x.id === id); if (!st) return;
+      if (!confirm('Xóa vĩnh viễn quán "' + st.name + '" và toàn bộ món của quán? Không thể khôi phục.')) return;
+      supabaseClient.from('foods').delete().eq('store_id', id).then(() => supabaseClient.from('stores').delete().eq('id', id)).then(({ error }) => {
+        if (error) return showToast('Không xóa được quán: ' + error.message);
+        state.stores = state.stores.filter(x => x.id !== id); state.foods = state.foods.filter(x => x.storeId !== id); saveState();
+        if (state.manageStoreId === id) exitManage(); else render();
+        showToast('Đã xóa quán.');
+      });
+    }
     function requireAccount() { if (!supabaseClient || hasAccount()) return true; state.showAuth = true; render(); return false; }
     function requireLogin() {
       if (!supabaseClient || state.user) return true;
@@ -258,12 +282,12 @@
     }
     async function authSubmit() {
       if (!supabaseClient) return showToast('Chưa kết nối được máy chủ.');
-      const id = String(state.authPhone || '').trim(), isMail = id.includes('@'), phone = normPhone(id);
-      if (!isMail && !/^0\d{9,10}$/.test(phone)) return showToast('Số điện thoại chưa đúng. Ví dụ: 0912345678');
+      const id = String(state.authPhone || '').trim(), isMail = id.includes('@'), isUser = !isMail && /^[a-z][a-z0-9_]{2,19}$/i.test(id), phone = normPhone(id);
+      if (!isMail && !isUser && !/^0\d{9,10}$/.test(phone)) return showToast('Số điện thoại hoặc tên đăng nhập chưa đúng. Ví dụ: 0912345678 hoặc admin');
       if (isMail && id.length < 6) return showToast('Email chưa đúng.');
       if (state.authPass.length < 6) return showToast('Mật khẩu cần từ 6 ký tự trở lên.');
       if (!isMail && !AUTH_MAILBOX) return showToast('Chủ app chưa cài đặt đăng nhập bằng số điện thoại. Tạm thời hãy dùng email.');
-      const cred = { email: isMail ? id.toLowerCase() : phoneEmail(phone), password: state.authPass };
+      const cred = { email: isMail ? id.toLowerCase() : isUser ? userEmail(id.toLowerCase()) : phoneEmail(phone), password: state.authPass };
       const { data, error } = state.authMode === 'login' ? await supabaseClient.auth.signInWithPassword(cred) : await supabaseClient.auth.signUp(cred);
       if (error) {
         const m = error.message || '';
@@ -278,7 +302,7 @@
         const dup = data.user && data.user.identities && data.user.identities.length === 0;
         return showToast(dup ? 'Số điện thoại này đã đăng ký rồi. Hãy bấm Đăng nhập.' : 'Đã tạo tài khoản nhưng Supabase đang yêu cầu xác nhận email. Chủ app cần tắt "Confirm email" trong Supabase.');
       }
-      if (!isMail) state.profile.phone = phone; state.showAuth = false; state.authPass = ''; saveState();
+      if (!isMail && !isUser) state.profile.phone = phone; state.showAuth = false; state.authPass = ''; saveState();
       showToast(state.authMode === 'login' ? 'Đã đăng nhập.' : 'Đã tạo tài khoản. Bạn đã đăng nhập.');
     }
     function setOrderStatus(id, status) {
@@ -442,7 +466,7 @@
           <div class="flex justify-between"><b>${r.s.name}</b><span class="text-gray-500">${r.n} đơn tháng này</span></div>
           <p class="text-gray-500">SĐT: ${r.s.phone}${r.s.suspended ? ' · <b class="text-rose-600">đang ẩn</b>' : ''}</p>
           ${r.dues.map(d => `<div class="flex justify-between items-center"><span class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${money(d.fee)} (hạn ${d.due.toLocaleDateString('vi-VN')})</span><button onclick="markPaid('${r.s.id}','${d.ym}',${d.fee})" class="bg-emerald-700 text-white px-2 py-1 rounded-lg text-[13px] font-bold">Đã thu</button></div>`).join('')}
-          <button onclick="setSuspended('${r.s.id}', ${!r.s.suspended})" class="text-[13px] font-bold ${r.s.suspended ? 'text-emerald-700' : 'text-rose-600'}">${r.s.suspended ? 'Mở lại quán' : 'Tạm ẩn quán'}</button></div>`).join('')}
+          <div class="flex flex-wrap items-center gap-3 pt-1"><button onclick="manageStore('${r.s.id}')" class="bg-emerald-700 text-white px-3 rounded-lg text-[13px] font-bold">🛠️ Quản lý quán này</button><button onclick="setSuspended('${r.s.id}', ${!r.s.suspended})" class="text-[13px] font-bold ${r.s.suspended ? 'text-emerald-700' : 'text-rose-600'}">${r.s.suspended ? 'Mở lại quán' : 'Tạm ẩn quán'}</button><button onclick="deleteStore('${r.s.id}')" class="text-[13px] font-bold text-rose-600">🗑 Xóa quán</button></div></div>`).join('')}
       </div>`;
     }
 
@@ -1456,6 +1480,7 @@
           `;
         } else {
           html += `
+            ${state.isAdmin && state.manageStoreId ? `<div class="rounded-2xl bg-sky-100 border border-sky-300 p-3 flex items-center justify-between gap-2"><b class="text-[13px] text-sky-900">🛠️ Admin đang quản lý quán: ${myStore.name}</b><button onclick="exitManage()" class="px-3 rounded-xl bg-white border text-[13px] font-bold">Thoát</button></div>` : ''}
             ${storePanelsHtml(myStore)}
             <div class="rounded-2xl bg-emerald-900 text-white p-4 space-y-2 shadow-sm">
               <div class="flex justify-between items-start">
@@ -1679,7 +1704,7 @@
             <div class="bg-white w-full max-w-md rounded-2xl p-4 shadow-2xl space-y-3">
               <div class="flex justify-between items-center border-b pb-2"><h3 class="font-extrabold text-base">${state.authMode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}</h3><button onclick="state.showAuth=false; render();" class="text-gray-400 font-bold">✕</button></div>
               <p class="text-[13px] text-gray-500">${state.authEmailMode ? 'Đăng nhập bằng email.' : (state.authMode === 'login' ? 'Nhập số điện thoại và mật khẩu của bạn.' : 'Dùng số điện thoại để đăng nhập lần sau. Hãy nhớ mật khẩu của bạn.')}</p>
-              <input value="${state.authPhone}" oninput="state.authPhone=this.value;" onkeydown="if (event.key === 'Enter') { event.preventDefault(); document.getElementById('authPass').focus(); }" autocomplete="${state.authEmailMode ? 'email' : 'tel'}" ${state.authEmailMode ? '' : 'inputmode="tel"'} class="field" placeholder="${state.authEmailMode ? 'Email của bạn' : 'Số điện thoại của bạn'}" />
+              <input value="${state.authPhone}" oninput="state.authPhone=this.value;" onkeydown="if (event.key === 'Enter') { event.preventDefault(); document.getElementById('authPass').focus(); }" autocomplete="username" autocapitalize="none" class="field" placeholder="${state.authEmailMode ? 'Email của bạn' : 'Số điện thoại hoặc tên đăng nhập'}" />
               <input id="authPass" type="${state.authShowPass ? 'text' : 'password'}" value="${state.authPass}" oninput="state.authPass=this.value;" onkeydown="if (event.key === 'Enter') { event.preventDefault(); authSubmit(); }" autocomplete="current-password" class="field" placeholder="Mật khẩu (từ 6 ký tự)" />
               <button type="button" onclick="state.authShowPass=!state.authShowPass; render();" class="self-start text-[13px] text-emerald-700 font-bold">${state.authShowPass ? 'Ẩn mật khẩu' : '👁 Hiện mật khẩu'}</button>
               <button onclick="authSubmit()" class="w-full bg-emerald-700 text-white py-3 rounded-xl text-[13px] font-extrabold">${state.authMode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}</button>
@@ -1711,7 +1736,7 @@
     setupRealtimeSync(); setupTableRealtime(); applyHash(); window.addEventListener('hashchange', applyHash); registerSW();
     if (supabaseClient) supabaseClient.auth.onAuthStateChange((_e, session) => {
       const prevUid = state.user && state.user.id; state.user = session && session.user ? { id: session.user.id, email: session.user.email } : null; if (state.user && state.user.id !== prevUid) setTimeout(loadProfile, 0);
-      if (!state.user) state.profile = { ...state.profile, myStoreId: '', name: '', phone: '', address: '' }, state.checkoutName = state.checkoutPhone = state.checkoutAddress = '';
+      if (!state.user) state.manageStoreId = '', state.profile = { ...state.profile, myStoreId: '', name: '', phone: '', address: '' }, state.checkoutName = state.checkoutPhone = state.checkoutAddress = '';
       setTimeout(() => { loadCloudData(); loadBilling(); loadStats(); }, 0); render();
     });
   </script>
