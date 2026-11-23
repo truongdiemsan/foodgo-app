@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>ShopFood - Đặt Món Siêu Tốc</title>
-  <meta name="theme-color" content="#FF5A36">
+  <meta name="theme-color" content="#4A1F16">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -14,22 +14,32 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
-    // Bảng màu chính của app: cam san hô (thay cho xanh lá) và hồng đỏ cho phần chuyển màu
-    tailwind.config = { theme: { extend: { colors: {
-      emerald: { 50: '#FFF4F0', 100: '#FFE6DE', 200: '#FFCDBD', 300: '#FFAA92', 400: '#FF8461', 500: '#FF6B45', 600: '#FF5A36', 700: '#E8432A', 800: '#C93820', 900: '#8F2A18', 950: '#5E1C10' },
-      teal: { 50: '#FFF0F5', 100: '#FFD9E6', 200: '#FFB3CD', 300: '#FF8AAF', 400: '#F66591', 500: '#EE4A7C', 600: '#E8467C', 700: '#D03A6B', 800: '#B02E58', 900: '#7F1F3E' }
-    } } } };
+    // Bảng màu ShopFood: vỏ quế (nâu đỏ sâu) làm nền sang trọng, đỏ gấc cho nút đặt món, vàng nghệ cho điểm nhấn, xanh lá chỉ dùng cho trạng thái "đang mở".
+    // Các tên emerald/teal/amber cũ được đổi sang bảng màu này nên toàn bộ app đổi tone đồng bộ.
+    tailwind.config = { theme: { extend: {
+      fontFamily: { sans: ['"Be Vietnam Pro"', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'], display: ['Fraunces', 'Georgia', 'serif'] },
+      colors: {
+        bark: { DEFAULT: '#4A1F16', deep: '#331510', soft: '#6B3022' },
+        gac: { DEFAULT: '#D93A1F', dark: '#B52E17' },
+        nghe: { DEFAULT: '#F2B134', soft: '#FFF3D6' },
+        emerald: { 50: '#FFF3EF', 100: '#FFE3DA', 200: '#FFC6B5', 300: '#FF9E85', 400: '#F2715A', 500: '#E8543A', 600: '#E0452A', 700: '#D93A1F', 800: '#B52E17', 900: '#4A1F16', 950: '#331510' },
+        teal: { 50: '#FBF1EC', 100: '#F4DDD1', 200: '#E8BBA4', 300: '#D79170', 400: '#C06C47', 500: '#A5502F', 600: '#8A3B22', 700: '#6F2D19', 800: '#5A2417', 900: '#3F1810' },
+        amber: { 50: '#FFF8E6', 100: '#FEEFC3', 200: '#FBE08F', 300: '#F7CB5E', 400: '#F2B134', 500: '#E69F1C', 600: '#C8820E', 700: '#A3650C', 800: '#7C4C0A', 900: '#5A3607' }
+      }
+    } } };
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+    .font-display { font-family: Fraunces, Georgia, 'Times New Roman', serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
+    .lift { box-shadow: 0 2px 14px rgba(74, 31, 22, 0.09); }
+    button:active { transform: scale(0.97); transition: transform .08s; }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
     .field { width: 100%; min-height: 44px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 11px 12px; font-size: 15px; color: #111827; background: #fff; outline: none; transition: all 0.2s; }
-    .field:focus { border-color: #FF5A36; box-shadow: 0 0 0 3px rgba(255,90,54,.18); }
-    /* Nút chính và thanh đầu trang: chuyển màu cam -> hồng như ảnh mẫu */
-    .bg-emerald-700 { background-image: linear-gradient(90deg, #FF5A36, #E8467C); }
-    .bg-emerald-700.border-emerald-700 { background-image: none; background-color: #FF5A36; }
-    header.bg-emerald-800 { background-image: linear-gradient(90deg, #FF5A36, #E8467C); }
+    .field:focus { border-color: #D93A1F; box-shadow: 0 0 0 3px rgba(217,58,31,.18); }
     button, select { min-height: 44px; }
     button:not(.w-full):not([class*="flex-1"]) { min-width: 44px; }
     a[href^="tel:"], a[href*="zalo.me"] { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
@@ -41,8 +51,8 @@
     .map-picker { height: 220px; width: 100%; border-radius: 1rem; z-index: 10; margin-top: 8px; }
   </style>
 </head>
-<body class="bg-slate-100 min-h-screen">
-  <div id="app" class="max-w-md mx-auto min-h-screen bg-slate-50 shadow-2xl relative pb-16 border-x border-gray-200"></div>
+<body class="bg-[#E9E3DC] min-h-screen">
+  <div id="app" class="max-w-md mx-auto min-h-screen bg-[#F6F3EF] shadow-2xl relative pb-16 border-x border-black/5"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -385,7 +395,7 @@
     }
     // ===== CẢNH BÁO ĐƠN MỚI: chuông lặp · rung · thông báo hệ thống · huy hiệu biểu tượng · quét dự phòng =====
     let audioCtx, wakeLock = null; const BASE_TITLE = document.title;
-    state.audioReady = false; state.ownerSec = ''; state.showDone = false; state.orderOpen = {};
+    state.weekSales = null; state.foodEdit = null; state.audioReady = false; state.ownerSec = ''; state.showDone = false; state.orderOpen = {};
     state.wakeOn = (() => { try { return localStorage.getItem('fg_wake') === '1'; } catch { return false; } })();
     const ownPending = () => { const sid = ownStoreId(); return sid ? state.orders.filter(o => o.storeId === sid && o.status === 'PENDING_CONFIRMATION') : []; };
     function unlockAudio() {
@@ -524,18 +534,14 @@
       return audio + (w.length ? `<div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 space-y-2">${w.map(x => `<div class="flex items-center justify-between gap-2 text-[13px] text-amber-900"><span class="font-bold">${x[0]}</span>${x[1] ? `<button onclick="${x[2]}" class="shrink-0 bg-emerald-700 text-white px-3 rounded-lg text-[13px] font-bold">${x[1]}</button>` : ''}</div>`).join('')}</div>` : '');
     }
     function ownerMenuHtml(foods) {
+      const featIds = featuredIds();
       return `<section class="space-y-2.5">
         <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🍽️ Thực đơn <span class="text-[13px] text-gray-400 font-bold">(${foods.length})</span></h2><button onclick="state.showFoodForm=true; render();" class="bg-emerald-700 text-white px-4 rounded-xl text-[13px] font-extrabold shadow">+ Thêm món</button></div>
-        ${foods.length ? `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">${foods.map(f => { const ed = state.editFoodId === f.id; return `<div class="p-2.5 space-y-2">
-          <div class="flex items-center gap-2.5"><img src="${f.image}" loading="lazy" class="w-14 h-14 rounded-xl object-cover shrink-0 ${f.inStock ? '' : 'grayscale'}" /><div class="flex-1 min-w-0"><b class="block text-[14px] text-gray-900 line-clamp-1">${escQ(f.name)}</b><span class="text-[14px] text-emerald-700 font-extrabold">${priceText(f)}</span>${f.note ? `<span class="ml-1.5 text-[13px] text-rose-600">· ${escQ(f.note)}</span>` : ''}</div>
-            <button onclick="toggleFoodStock('${f.id}')" class="shrink-0 h-10 px-3 rounded-xl text-[13px] font-extrabold ${f.inStock ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">${f.inStock ? 'Còn món' : 'Hết món'}</button>
-            <button onclick="state.editFoodId = ${ed ? "''" : "'" + f.id + "'"}; render();" class="shrink-0 w-10 h-10 rounded-xl border bg-white text-lg" aria-label="Sửa món">${ed ? '▲' : '⚙️'}</button></div>
-          ${ed ? `<div class="space-y-2 bg-gray-50 rounded-xl p-2.5">
-            <div class="grid grid-cols-2 gap-2"><label class="block space-y-1"><span class="text-[13px] font-bold">Danh mục</span><select onchange="setFoodCategory('${f.id}', this.value)" class="field">${catOptions(f.category)}</select></label>
-              <label class="block space-y-1"><span class="text-[13px] font-bold">Nhãn ghi chú</span><input value="${(f.note || '').replace(/"/g, '&quot;')}" onchange="setFoodNote('${f.id}', this.value)" maxlength="40" class="field" placeholder="VD: Đặt trước" /></label></div>
-            <label class="block space-y-1"><span class="text-[13px] font-bold">Size và giá</span><input value="${sizesToText(f.sizes)}" onchange="setFoodSizes('${f.id}', this.value)" class="field" placeholder="VD: M 25, L 30" /></label>
-            <p class="text-[13px] text-gray-600">${(f.groups || []).length ? groupsSummary(f.groups) : 'Chưa có tùy chọn (topping, đá, đường...)'}</p>
-            <div class="flex gap-2"><button onclick="openOptEditor('${f.id}')" class="flex-1 border-2 border-dashed border-emerald-400 text-emerald-700 rounded-xl py-2.5 text-[13px] font-extrabold bg-emerald-50">✏️ ${(f.groups || []).length ? 'Sửa' : 'Thêm'} tùy chọn</button><button onclick="deleteFood('${f.id}')" class="px-4 border border-rose-300 text-rose-600 rounded-xl text-[13px] font-bold bg-white">🗑 Xóa món</button></div></div>` : ''}</div>`; }).join('')}</div>`
+        ${foods.length ? `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">${foods.map(f => `<div class="p-2.5 flex items-center gap-2.5">
+          <img src="${f.image}" loading="lazy" onclick="openFoodEdit('${f.id}')" class="w-14 h-14 rounded-xl object-cover shrink-0 ${f.inStock ? '' : 'grayscale'}" />
+          <div class="flex-1 min-w-0" onclick="openFoodEdit('${f.id}')"><b class="block text-[14px] text-gray-900 line-clamp-1">${escQ(f.name)}</b><span class="text-[14px] text-gac font-extrabold">${priceText(f)}</span>${f.note ? `<span class="ml-1.5 text-[13px] text-rose-600">· ${escQ(f.note)}</span>` : ''}${featIds.has(f.id) ? '<span class="block mt-0.5"><span class="inline-block bg-bark text-nghe text-[13px] font-bold px-2 py-0.5 rounded-full">Đang hiện ở trang chủ</span></span>' : (state.weekSales && state.weekSales[f.id] ? `<span class="block text-[13px] text-gray-500">Tuần này bán ${state.weekSales[f.id]} phần</span>` : '')}</div>
+          <button onclick="toggleFoodStock('${f.id}')" class="shrink-0 h-10 px-3 rounded-xl text-[13px] font-extrabold ${f.inStock ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">${f.inStock ? 'Còn món' : 'Hết món'}</button>
+          <button onclick="openFoodEdit('${f.id}')" class="shrink-0 h-10 px-3 rounded-xl border border-emerald-600 text-emerald-700 bg-white text-[13px] font-extrabold" aria-label="Sửa món">✏️ Sửa</button></div>`).join('')}</div>`
         : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có món nào. Bấm "+ Thêm món" để bắt đầu bán!</div>'}
       </section>`;
     }
@@ -569,9 +575,10 @@
       return `${state.isAdmin && state.manageStoreId ? `<div class="rounded-2xl bg-sky-100 border border-sky-300 p-3 flex items-center justify-between gap-2"><b class="text-[13px] text-sky-900">🛠️ Admin đang quản lý quán: ${escQ(s.name)}</b><button onclick="exitManage()" class="px-3 rounded-xl bg-white border text-[13px] font-bold">Thoát</button></div>` : ''}
         <div class="sticky top-0 z-30 -mx-3 px-3 py-2 bg-gray-50/95 backdrop-blur"><div class="flex items-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-2">
           <img src="${s.image}" class="w-11 h-11 rounded-xl object-cover shrink-0" />
-          <div class="flex-1 min-w-0"><b class="block text-[15px] text-gray-900 line-clamp-1">${escQ(s.name)}</b><p class="text-[13px] ${pn ? 'text-rose-600 font-bold' : s.isOpen ? 'text-emerald-700' : 'text-gray-500'}">${pn ? '🔴 ' + pn + ' đơn chờ xác nhận' : s.isOpen ? '● Đang mở bán' : 'Đang tạm nghỉ'}</p></div>
+          <div class="flex-1 min-w-0"><b class="block text-[15px] text-gray-900 line-clamp-1">${escQ(s.name)}</b><p class="text-[13px] ${pn ? 'text-rose-600 font-bold' : s.isOpen ? 'text-green-700' : 'text-gray-500'}">${pn ? '🔴 ' + pn + ' đơn chờ xác nhận' : s.isOpen ? '● Đang mở bán' : 'Đang tạm nghỉ'}</p></div>
           <button onclick="toggleSound()" class="shrink-0 w-11 h-11 rounded-full text-xl ${state.soundOn ? 'bg-emerald-100' : 'bg-gray-100'}" aria-label="Bật tắt chuông báo">${state.soundOn ? '🔔' : '🔕'}</button>
-          <button onclick="toggleStoreOpen('${s.id}')" class="shrink-0 h-11 px-3.5 rounded-full font-extrabold text-[13px] ${s.isOpen ? 'bg-emerald-700 text-white' : 'bg-gray-200 text-gray-700'}">${s.isOpen ? 'Đang mở' : 'Đang nghỉ'}</button></div></div>
+          <button onclick="toggleStoreOpen('${s.id}')" class="shrink-0 h-11 px-3.5 rounded-full font-extrabold text-[13px] ${s.isOpen ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-700'}">${s.isOpen ? 'Đang mở' : 'Đang nghỉ'}</button></div></div>
+        <div class="grid grid-cols-2 gap-2"><button onclick="state.viewStoreId='${s.id}'; state.storeCat='Tất cả'; render(); window.scrollTo(0,0);" class="bg-emerald-700 text-white rounded-2xl py-3 text-[14px] font-extrabold shadow">👁️ Xem trang quán</button><button onclick="shareStore('${s.id}')" class="bg-white border border-emerald-600 text-emerald-800 rounded-2xl py-3 text-[14px] font-extrabold">📤 Chia sẻ quán</button></div>
         ${ownerAlertSetupHtml()}
         ${s.suspended ? '<div class="rounded-xl bg-rose-100 text-rose-800 p-3 text-[13px] font-bold">⛔ Quán đang bị tạm ẩn vì quá hạn đóng phí. Đóng xong, quản trị sẽ mở lại.</div>' : ''}
         ${tableRequestsHtml()}
@@ -720,13 +727,14 @@
       const meta = f => { const x = state.foodStats[f.id], p = []; if (x && x.cnt) p.push('⭐ ' + x.avg.toFixed(1) + ' (' + x.cnt + ')'); if (x && x.orders) p.push('🛒 ' + x.orders + ' đơn'); return p.join(' · '); };
       const act = 'flex flex-col items-center justify-center gap-0.5 rounded-xl border border-gray-200 bg-white py-2 text-[13px] font-bold text-gray-700';
       const rating = state.ratings[s.id], rt = rating && rating.cnt ? `<span class="text-[13px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">⭐ ${rating.avg.toFixed(1)} (${rating.cnt})</span>` : '<span class="text-[13px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Quán mới</span>';
-      const back = state.lockedStoreId ? (state.profile.myStoreId === s.id ? `<button onclick="exitLockedStore()" class="bg-white/95 rounded-full px-3 h-11 font-bold text-[13px] shadow">⚙️ Quản lý quán</button>` : '<span></span>') : `<button onclick="closeStorePage()" class="bg-white/95 rounded-full w-11 h-11 text-xl font-black shadow" aria-label="Quay lại">‹</button>`;
+      const isOwnerView = state.user && state.profile.myStoreId === s.id;
+      const back = isOwnerView && !state.lockedStoreId && state.activeTab === 'mystore' ? `<button onclick="closeStorePage();" class="bg-white/95 rounded-full px-4 h-11 font-extrabold text-[13px] shadow flex items-center gap-1">‹ Về quản lý quán</button>` : state.lockedStoreId ? (state.profile.myStoreId === s.id ? `<button onclick="exitLockedStore()" class="bg-white/95 rounded-full px-3 h-11 font-bold text-[13px] shadow">⚙️ Quản lý quán</button>` : '<span></span>') : `<button onclick="closeStorePage()" class="bg-white/95 rounded-full w-11 h-11 text-xl font-black shadow" aria-label="Quay lại">‹</button>`;
       return `<div class="fixed inset-0 z-40 bg-gray-50 overflow-y-auto" data-scroll="s0"><div class="max-w-md mx-auto pb-28">
         <div class="relative h-40 bg-gradient-to-r from-emerald-800 to-teal-600 overflow-hidden">${s.cover ? `<img src="${s.cover}" class="absolute inset-0 w-full h-full object-cover" />` : ''}<div class="absolute inset-0 bg-gradient-to-b from-black/35 via-transparent to-black/20"></div>
           <div class="absolute top-3 left-3 right-3 flex items-center justify-between">${back}<button onclick="openCart()" class="bg-white text-emerald-700 rounded-full pl-3 pr-1.5 flex items-center gap-1.5 font-extrabold shadow-md text-[14px]">🛒 Giỏ hàng <span class="bg-emerald-700 text-white rounded-full min-w-[26px] h-[26px] px-1 flex items-center justify-center text-[13px] font-black">${cartCount()}</span></button></div></div>
         <div class="px-3 -mt-12 relative space-y-3">
           <div class="bg-white rounded-2xl shadow-md border border-gray-100 p-3 space-y-3">
-            <div class="flex gap-3 items-center"><img src="${s.image}" class="w-16 h-16 rounded-2xl object-cover shadow shrink-0" /><div class="min-w-0 flex-1"><h2 class="font-black text-[18px] text-gray-900 leading-tight">${s.name}</h2><div class="flex flex-wrap items-center gap-1.5 mt-1"><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${s.isOpen ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-600'}">${s.isOpen ? '● Đang mở cửa' : 'Tạm nghỉ'}</span>${rt}</div></div></div>
+            <div class="flex gap-3 items-center"><img src="${s.image}" class="w-16 h-16 rounded-2xl object-cover shadow shrink-0" /><div class="min-w-0 flex-1"><h2 class="font-black text-[18px] text-gray-900 leading-tight">${s.name}</h2><div class="flex flex-wrap items-center gap-1.5 mt-1"><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${s.isOpen ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-600'}">${s.isOpen ? '● Đang mở cửa' : 'Tạm nghỉ'}</span>${rt}</div></div></div>
             ${s.slogan ? `<p class="text-[14px] font-bold text-emerald-800 leading-snug">${s.slogan}</p>` : ''}
             ${s.about ? `<p class="text-[13px] text-gray-600 whitespace-pre-line ${clamp}">${s.about}</p>` : ''}
             <div class="grid ${s.phone ? 'grid-cols-4' : 'grid-cols-2'} gap-2">
@@ -737,7 +745,7 @@
           </div>
           <div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2.5">${row('🕒', 'Giờ mở cửa', s.openHours)}${row('📍', 'Địa chỉ', s.address)}${row('🚚', 'Giao hàng', s.shipInfo || 'Hỏi quán khi đặt')}${row('💵', 'Thanh toán', s.payInfo || 'Thỏa thuận với quán')}
             <button onclick="state.storeInfoOpen=!state.storeInfoOpen; render();" class="w-full text-center text-[13px] font-bold text-emerald-700">${state.storeInfoOpen ? 'Thu gọn ▲' : 'Xem đầy đủ ▼'}</button></div>
-          ${state.lastOrderIds.length ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 space-y-2"><div class="flex justify-between items-start"><b class="text-[14px] text-emerald-900">✓ Đã gửi đơn ${state.lastOrderIds.join(', ')} tới quán</b><button onclick="state.lastOrderIds=[]; render();" class="text-gray-400 font-bold px-1" aria-label="Đóng">✕</button></div><p class="text-[13px] text-gray-600">Quán sẽ xác nhận và liên hệ qua số điện thoại bạn đã nhập.</p><button onclick="state.viewStoreId=''; setTab('orders');" class="w-full border rounded-xl py-2.5 text-[13px] font-bold bg-white text-emerald-800">📋 Xem đơn của tôi</button></div>` : ''}
+          ${state.lastOrderIds.length ? `<div class="rounded-2xl bg-green-50 border border-green-200 p-3 space-y-2"><div class="flex justify-between items-start"><b class="text-[14px] text-green-900">✓ Đã gửi đơn ${state.lastOrderIds.join(', ')} tới quán</b><button onclick="state.lastOrderIds=[]; render();" class="text-gray-400 font-bold px-1" aria-label="Đóng">✕</button></div><p class="text-[13px] text-gray-600">Quán sẽ xác nhận và liên hệ qua số điện thoại bạn đã nhập.</p><button onclick="state.viewStoreId=''; setTab('orders');" class="w-full border rounded-xl py-2.5 text-[13px] font-bold bg-white text-emerald-800">📋 Xem đơn của tôi</button></div>` : ''}
           ${state.tableCtx && state.tableCtx.storeId === s.id ? tableBarHtml() : ''}
           <div class="flex items-end justify-between pt-1"><h3 class="font-extrabold text-[16px] text-gray-900">Thực đơn</h3><span class="text-[13px] text-gray-400">${all.length} món</span></div>
           ${cats.length > 1 ? `<div data-scroll="storecats" class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">${['Tất cả', ...cats].map(c => `<button onclick="state.storeCat='${c}'; render();" class="shrink-0 px-4 rounded-full border text-[14px] font-bold ${cat === c ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-gray-200 text-gray-700'}">${c}</button>`).join('')}</div>` : ''}
@@ -801,26 +809,70 @@
     let newIds = new Set();
     function foodCardHtml(f) {
       const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
-      return `<div class="h-full bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${foodOk(f) ? '' : 'opacity-70'}">
+      return `<div class="h-full bg-white rounded-2xl border border-black/5 lift overflow-hidden flex flex-col ${foodOk(f) ? '' : 'opacity-70'}">
         <div class="relative h-36 overflow-hidden bg-gray-100 cursor-pointer" onclick="${go}">
           <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover ${f.inStock ? '' : 'grayscale'}" />
           ${f.inStock ? (st.isOpen ? '' : '<span class="absolute bottom-2 left-2 bg-gray-800/85 text-white text-[13px] font-bold px-2 py-0.5 rounded-lg">Quán đang nghỉ</span>') : '<div class="absolute inset-0 flex items-center justify-center bg-white/40"><span class="bg-gray-800 text-white font-black px-3 py-1 rounded-lg text-[14px]">HẾT MÓN</span></div>'}
           <div class="absolute bottom-2 right-2 z-10">${plusHtml(f.id, true)}</div>
-          ${sold > 0 ? `<span class="absolute top-2 left-2 bg-rose-600 text-white text-[13px] font-bold px-2 py-0.5 rounded-full">🔥 Đã bán ${sold}</span>` : (newIds.has(f.id) ? '<span class="absolute top-2 left-2 bg-emerald-600 text-white text-[13px] font-bold px-2 py-0.5 rounded-full">✨ Mới</span>' : '')}
+          ${sold > 0 ? `<span class="absolute top-2 left-2 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">Đã bán ${sold}</span>` : (newIds.has(f.id) ? '<span class="absolute top-2 left-2 bg-bark text-nghe text-[13px] font-bold px-2.5 py-0.5 rounded-full">Mới</span>' : '')}
         </div>
         <div class="p-2.5 flex flex-col gap-1 flex-1 cursor-pointer" onclick="${go}">
           <b class="text-[14px] text-gray-900 leading-snug line-clamp-2">${f.name}</b>${noteChip(f.note)}
           <p class="text-[13px] text-gray-500 flex items-center gap-1 min-w-0"><span class="shrink-0">🏪</span><span class="truncate font-semibold text-gray-600">${st.name || ''}</span><span class="text-amber-600 font-bold shrink-0">${ratingShort(f.storeId).replace('Quán mới', '')}</span></p>
-          <div class="mt-auto pt-1"><span class="block text-[17px] font-extrabold text-emerald-700">${priceText(f)}</span></div>
+          <div class="mt-auto pt-1"><span class="block text-[17px] font-extrabold text-gac">${priceText(f)}</span></div>
         </div></div>`;
+    }
+    // ===== PHẦN TRƯNG BÀY: BÁN CHẠY TRONG TUẦN, TỰ ĐỘNG LƯỚT =====
+    const FEATURE_ROTATE_MS = 2500;   // thời gian dừng ở mỗi món (mili giây). Muốn nhanh hơn thì giảm số này.
+    const FEATURE_MAX = 8, FEATURE_PER_STORE = 2;
+    function computeFeatured() {
+      const pool = state.foods.filter(f => foodOk(f) && !(state.stores.find(x => x.id === f.storeId) || {}).suspended);
+      const wk = f => (state.weekSales ? state.weekSales[f.id] : 0) || 0, all = f => state.sales[f.id] || 0;
+      const order = (list, key) => [...list].sort((a, b) => key(b) - key(a));
+      const picked = [], perStore = {}, ids = new Set();
+      const take = list => list.forEach(f => { if (picked.length >= FEATURE_MAX || ids.has(f.id) || (perStore[f.storeId] || 0) >= FEATURE_PER_STORE) return; picked.push(f); ids.add(f.id); perStore[f.storeId] = (perStore[f.storeId] || 0) + 1; });
+      take(order(pool.filter(f => wk(f) > 0), wk));                  // 1) bán chạy trong 7 ngày qua
+      if (picked.length < 4) take(order(pool.filter(f => all(f) > 0), all)); // 2) chưa đủ thì bổ sung món bán nhiều từ trước tới nay
+      if (picked.length < 4) take(pool);                                // 3) vẫn chưa đủ thì lấy món mới đăng
+      return picked;
+    }
+    const featuredIds = () => new Set(computeFeatured().map(f => f.id));
+    let featPauseUntil = 0;
+    function featStep(el) { const c = el.querySelectorAll('[data-feat]'); return c.length > 1 ? c[1].offsetLeft - c[0].offsetLeft : 0; }
+    function featSyncDots(el) {
+      const st = featStep(el); if (!st) return;
+      const i = Math.min(el.querySelectorAll('[data-feat]').length - 1, Math.round(el.scrollLeft / st));
+      document.querySelectorAll('[data-dot]').forEach(d => { const on = +d.dataset.dot === i; d.className = 'h-1.5 rounded-full transition-all ' + (on ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'); });
+    }
+    function featTick() {
+      if (document.hidden || Date.now() < featPauseUntil || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+      if (state.activeTab !== 'home' || state.viewStoreId || state.showCart || state.showCheckout || state.sizePick || state.optEdit || state.showAuth) return;
+      const el = document.querySelector('[data-scroll="feat"]'); if (!el) return;
+      const r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
+      const st = featStep(el), n = el.querySelectorAll('[data-feat]').length; if (!st || n < 2) return;
+      const next = (Math.round(el.scrollLeft / st) + 1) % n;
+      el.scrollTo({ left: next * st, behavior: 'smooth' });
+    }
+    setInterval(featTick, FEATURE_ROTATE_MS);
+    ['touchstart', 'pointerdown', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('[data-scroll="feat"]')) featPauseUntil = Date.now() + 8000; }, { capture: true, passive: true }));
+    document.addEventListener('scroll', e => { const t = e.target; if (t && t.dataset && t.dataset.scroll === 'feat') featSyncDots(t); }, true);
+    function featCardHtml(f) {
+      const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
+      const wkSold = state.weekSales ? (state.weekSales[f.id] || 0) : 0, badge = wkSold > 0 ? 'Tuần này bán ' + wkSold : sold > 0 ? 'Đã bán ' + sold : 'Món mới';
+      return `<div data-feat class="snap-start shrink-0 w-[74%] max-w-[300px]"><div class="relative h-[268px] rounded-3xl overflow-hidden bg-bark-deep ring-1 ring-white/10 cursor-pointer" onclick="${go}">
+        <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
+        <span class="absolute top-3 left-3 bg-nghe text-bark text-[13px] font-bold px-3 py-1 rounded-full">${badge}</span>
+        <div class="absolute left-4 right-16 bottom-4"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[21px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><p class="text-nghe font-extrabold text-[18px] mt-1">${priceText(f)}</p></div>
+        <div class="absolute right-3 bottom-3 z-10">${plusHtml(f.id, true)}</div></div></div>`;
     }
     function foodMiniCardHtml(f) {
       const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
-      return `<div class="shrink-0 w-40 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden ${foodOk(f) ? '' : 'opacity-70'}">
+      return `<div class="shrink-0 w-40 bg-white rounded-2xl border border-black/5 lift overflow-hidden ${foodOk(f) ? '' : 'opacity-70'}">
         <div class="relative h-28 bg-gray-100 cursor-pointer" onclick="${go}"><img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover ${f.inStock ? '' : 'grayscale'}" />
-          ${sold > 0 ? `<span class="absolute top-2 left-2 bg-rose-600 text-white text-[13px] font-bold px-2 py-0.5 rounded-full">🔥 ${sold}</span>` : (newIds.has(f.id) ? '<span class="absolute top-2 left-2 bg-emerald-600 text-white text-[13px] font-bold px-2 py-0.5 rounded-full">✨ Mới</span>' : '')}
+          ${sold > 0 ? `<span class="absolute top-2 left-2 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">Đã bán ${sold}</span>` : (newIds.has(f.id) ? '<span class="absolute top-2 left-2 bg-bark text-nghe text-[13px] font-bold px-2.5 py-0.5 rounded-full">Mới</span>' : '')}
           <div class="absolute bottom-2 right-2 z-10">${plusHtml(f.id, true)}</div></div>
-        <div class="p-2 cursor-pointer" onclick="${go}"><b class="block text-[14px] text-gray-900 line-clamp-1">${f.name}</b><p class="text-[13px] text-gray-500 line-clamp-1">🏪 ${st.name || ''} ${ratingShort(f.storeId).replace('Quán mới', '')}</p><span class="block text-[16px] font-extrabold text-emerald-700 mt-0.5">${priceText(f)}</span></div></div>`;
+        <div class="p-2 cursor-pointer" onclick="${go}"><b class="block text-[14px] text-gray-900 line-clamp-1">${f.name}</b><p class="text-[13px] text-gray-500 line-clamp-1">🏪 ${st.name || ''} ${ratingShort(f.storeId).replace('Quán mới', '')}</p><span class="block text-[16px] font-extrabold text-gac mt-0.5">${priceText(f)}</span></div></div>`;
     }
     async function loadStats() {
       if (!supabaseClient) return;
@@ -830,6 +882,7 @@
       if (a.error) a = await supabaseClient.rpc('food_sales'); // dự phòng nếu chưa chạy SQL mới
       state.sales = {}; state.foodStats = {};
       (a.data || []).forEach(r => { state.sales[r.food_id] = Number(r.sold) || 0; state.foodStats[r.food_id] = { orders: Number(r.orders_cnt) || 0, avg: Number(r.avg_stars) || 0, cnt: Number(r.rating_cnt) || 0 }; });
+      try { const w = await supabaseClient.rpc('food_sales_week', { days: 7 }); if (w.error) state.weekSales = null; else { state.weekSales = {}; (w.data || []).forEach(r => state.weekSales[r.food_id] = Number(r.sold) || 0); } } catch { state.weekSales = null; }
       state.ratings = {}; (b.data || []).forEach(r => state.ratings[r.store_id] = { avg: Number(r.avg_stars), cnt: Number(r.cnt) });
       state.myReviews = {}; (c.data || []).forEach(r => state.myReviews[r.order_id] = r.stars);
       render();
@@ -889,7 +942,7 @@
     const CATEGORIES = ['Món ăn', 'Đồ uống', 'Ăn vặt', 'Đặc sản'];
     const catOptions = cur => (CATEGORIES.includes(cur) ? CATEGORIES : [cur, ...CATEGORIES]).map(c => `<option ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
     function categoryBarHtml() {
-      return `<div data-scroll="cats" class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">${['Tất cả', ...CATEGORIES].map(c => `<button onclick="state.selectedCategory='${c}'; render();" class="shrink-0 px-4 rounded-full border text-[14px] font-bold ${state.selectedCategory === c ? 'bg-emerald-700 border-emerald-700 text-white' : 'bg-white border-gray-200 text-gray-700'}">${c}</button>`).join('')}</div>`;
+      return `<div data-scroll="cats" class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">${['Tất cả', ...CATEGORIES].map(c => `<button onclick="state.selectedCategory='${c}'; render();" class="shrink-0 px-5 rounded-full border text-[14px] font-bold ${state.selectedCategory === c ? 'bg-bark border-bark text-nghe' : 'bg-white border-gray-200 text-gray-700'}">${c}</button>`).join('')}</div>`;
     }
     function setFoodCategory(id, cat) {
       const f = state.foods.find(x => x.id === id); if (!f) return;
@@ -1109,16 +1162,29 @@
       if (!state.cart.length) return showToast('Giỏ hàng đang trống. Hãy chọn món bạn thích!');
       state.showCart = true; render();
     }
-    function heroBannerHtml() {
-      return `<section class="relative overflow-hidden text-white rounded-b-3xl" style="background: linear-gradient(125deg, #FF6A3D 0%, #F2485F 58%, #E8467C 100%)">
-        <div class="absolute -top-12 -right-10 w-44 h-44 rounded-full bg-white/10"></div>
-        <div class="relative px-4 pt-4 pb-3 flex items-center gap-3">
-          <div class="flex-1 min-w-0 space-y-1">
-            <p class="font-black text-[21px] leading-tight">Hôm nay ăn gì nhỉ?</p>
-            <p class="text-[14px] font-semibold text-white/95">Món ngon từ quán gần bạn, giao tận nơi 🛵</p>
+    function homeTopHtml(featured) {
+      const area = (ADMINISTRATIVE_LOCATIONS[0] || {}).district || '', show = featured.length > 0 || !state.searchQuery && state.selectedCategory === 'Tất cả';
+      const header = `<header class="sticky top-0 z-30 bg-bark text-white ${show ? '' : 'rounded-b-3xl shadow-lg'}"><div class="px-4 pt-3 pb-3 space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-baseline gap-2 min-w-0"><span class="font-display text-[25px] font-bold text-nghe leading-none">ShopFood</span>${area ? `<span class="text-[13px] text-white/65 truncate">${escQ(area)}</span>` : ''}</div>
+            <button onclick="openCart()" class="shrink-0 h-11 pl-4 pr-1.5 rounded-full bg-white/10 border border-white/25 text-white flex items-center gap-2 text-[14px] font-bold">Giỏ hàng <span class="bg-nghe text-bark rounded-full min-w-[30px] h-8 px-1.5 flex items-center justify-center text-[14px] font-black">${cartCount()}</span></button>
           </div>
-          <div class="flex items-end shrink-0 select-none pointer-events-none" style="filter: drop-shadow(0 6px 8px rgba(0,0,0,.25))"><span style="font-size:38px; line-height:1; margin-right:-6px; transform: rotate(-8deg)">🍜</span><span style="font-size:44px; line-height:1; z-index:1">🍹</span></div>
-        </div>
+          <div class="relative">
+            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] text-gray-400 pointer-events-none">🔍</span>
+            <input value="${escQ(state.searchQuery)}" oninput="state.searchQuery=this.value; render();" placeholder="Hôm nay bạn muốn ăn gì?" enterkeyhint="search" autocomplete="off" class="w-full bg-white text-gray-900 pl-11 pr-28 rounded-full text-[15px] outline-none focus:ring-2 focus:ring-nghe" style="min-height:50px" />
+            <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
+              ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" aria-label="Xóa tìm kiếm" class="w-11 h-11 rounded-full text-gray-400 font-bold">✕</button>` : ''}
+              <button onclick="startVoiceRecognition()" aria-label="Tìm bằng giọng nói" class="w-11 h-11 rounded-full flex items-center justify-center text-xl ${state.isListening ? 'bg-gac text-white animate-pulse' : 'bg-nghe text-bark'}">🎙️</button>
+            </div>
+          </div>
+          ${state.isListening ? '<p class="text-[13px] text-nghe font-bold text-center">Đang nghe... hãy nói tên món bạn muốn (bấm micro để dừng)</p>' : ''}
+        </div></header>`;
+      if (state.searchQuery || state.selectedCategory !== 'Tất cả') return header;
+      const skeleton = !state.cloudLoaded && !state.foods.length ? '<div class="flex gap-3 px-4 overflow-hidden"><div class="shrink-0 w-[74%] h-[268px] rounded-3xl bg-white/10 animate-pulse"></div><div class="shrink-0 w-[74%] h-[268px] rounded-3xl bg-white/10 animate-pulse"></div></div>' : '';
+      return header + `<section class="bg-gradient-to-b from-bark to-bark-deep text-white rounded-b-[28px] pb-6">
+        <div class="px-4 pt-1"><h2 class="font-display text-[30px] leading-[1.08] font-bold">Hôm nay ăn gì nhỉ?</h2><p class="mt-1.5 text-[14px] leading-snug text-white/75 max-w-[30ch]">Chọn món, nhập số điện thoại và địa chỉ là xong. Không cần đăng ký.</p></div>
+        ${featured.length ? `<div class="mt-4 px-4 flex items-center justify-between gap-2"><h3 class="font-display text-[19px] font-bold text-white">${state.weekSales && featured.some(f => (state.weekSales[f.id] || 0) > 0) ? 'Bán chạy trong tuần' : 'Món được đặt nhiều'}</h3>${featured.length > 1 ? `<div class="flex items-center gap-1.5" aria-hidden="true">${featured.map((f, i) => `<span data-dot="${i}" class="h-1.5 rounded-full transition-all ${i === 0 ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'}"></span>`).join('')}</div>` : ''}</div>
+        <div data-scroll="feat" class="mt-3 flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 scroll-px-4">${featured.map(featCardHtml).join('')}<div class="shrink-0 w-1"></div></div>` : skeleton}
       </section>`;
     }
 
@@ -1497,6 +1563,53 @@
       showToast(`Đã đăng món "${name}" thành công!`);
     }
 
+    // ===== SỬA MÓN ĐÃ ĐĂNG: tên · giá · size · ảnh · danh mục · nhãn · mô tả · tùy chọn =====
+    const attrQ = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    function openFoodEdit(id) {
+      const f = state.foods.find(x => x.id === id); if (!f) return;
+      state.foodEdit = { id, name: f.name, priceInput: String(f.price % 1000 === 0 && f.price < 1000000 ? f.price / 1000 : f.price), category: f.category, description: f.description || '', image: f.image || '', note: f.note || '', sizes: sizesToText(f.sizes) };
+      render();
+    }
+    function updateEditPricePreview() {
+      const e = state.foodEdit, el = document.getElementById('editPricePreview'); if (!e || !el) return;
+      const sz = parseSizes(e.sizes), v = parseShortPrice(e.priceInput);
+      el.textContent = sz.length ? 'Có size nên giá hiển thị: từ ' + money(Math.min(...sz.map(x => x.price))) : (v > 0 ? 'Hiển thị: ' + money(v) : '');
+    }
+    function saveFoodEdit() {
+      const e = state.foodEdit; if (!e) return;
+      const f = state.foods.find(x => x.id === e.id); if (!f) { state.foodEdit = null; return render(); }
+      const name = cleanTxt(e.name, 80), sizes = parseSizes(e.sizes);
+      if ((e.sizes || '').trim() && !sizes.length) return showToast('Size nhập chưa đúng. Ví dụ: M 25, L 30');
+      const price = sizes.length ? Math.min(...sizes.map(x => x.price)) : parseShortPrice(e.priceInput);
+      if (!name) return showToast('Tên món không được để trống.');
+      if (price <= 0) return showToast('Nhập giá tiền hợp lệ.');
+      Object.assign(f, { name, price, sizes, category: e.category, description: String(e.description || '').trim().slice(0, 300), note: String(e.note || '').trim().slice(0, 40), image: e.image || f.image });
+      state.foodEdit = null; saveState(); render();
+      if (supabaseClient) supabaseClient.from('foods').update({ name: f.name, price: f.price, category: f.category, description: f.description, image: f.image, note: f.note, sizes: f.sizes }).eq('id', f.id)
+        .then(({ error }) => { if (error) showToast('Chưa lưu được lên máy chủ: ' + error.message); else showToast('Đã lưu món "' + f.name + '".'); });
+      else showToast('Đã lưu món "' + f.name + '".');
+    }
+    function foodEditHtml() {
+      const e = state.foodEdit; if (!e) return '';
+      const f = state.foods.find(x => x.id === e.id); if (!f) return '';
+      const lab = 'text-[13px] font-bold text-gray-700';
+      return `<div class="fixed inset-0 z-50 bg-black/60 flex items-end justify-center" onclick="state.foodEdit=null; render();"><div class="bg-white w-full max-w-md rounded-t-3xl shadow-2xl flex flex-col" style="max-height:94vh" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between px-4 pt-3 pb-2 border-b shrink-0"><h3 class="font-extrabold text-[17px]">✏️ Sửa món</h3><button onclick="state.foodEdit=null; render();" class="w-10 h-10 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
+        <div data-scroll="foodedit" class="overflow-y-auto px-4 py-3 space-y-3">
+          <div class="flex items-center gap-3"><img src="${attrQ(e.image)}" class="w-24 h-24 rounded-2xl object-cover border bg-gray-100 shrink-0" /><div class="flex-1 space-y-1"><span class="${lab}">Hình ảnh món</span><input type="file" accept="image/*" onchange="handleImageUpload(this, 500, url => state.foodEdit.image = url)" class="block w-full text-[13px] text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[13px] file:font-semibold file:bg-emerald-50 file:text-emerald-700" /></div></div>
+          <label class="block space-y-1"><span class="${lab}">Tên món *</span><input value="${attrQ(e.name)}" oninput="state.foodEdit.name=this.value;" maxlength="80" class="field" /></label>
+          <label class="block space-y-1"><span class="${lab}">Giá bán (gõ tắt: 35 = 35.000đ) *</span><input value="${attrQ(e.priceInput)}" oninput="state.foodEdit.priceInput=this.value; updateEditPricePreview();" inputmode="numeric" class="field" placeholder="35" /><p id="editPricePreview" class="text-[13px] text-emerald-700 font-bold">${(() => { const sz = parseSizes(e.sizes), v = parseShortPrice(e.priceInput); return sz.length ? 'Có size nên giá hiển thị: từ ' + money(Math.min(...sz.map(x => x.price))) : (v > 0 ? 'Hiển thị: ' + money(v) : ''); })()}</p></label>
+          <label class="block space-y-1"><span class="${lab}">Size và giá (không bắt buộc)</span><input value="${attrQ(e.sizes)}" oninput="state.foodEdit.sizes=this.value; updateEditPricePreview();" class="field" placeholder="VD: M 25, L 30, XL 35" /><p class="text-[13px] text-gray-500">Có size thì giá món lấy theo size nhỏ nhất. Xóa trắng ô này nếu món chỉ có một giá.</p></label>
+          <label class="block space-y-1"><span class="${lab}">Danh mục</span><select onchange="state.foodEdit.category=this.value" class="field">${catOptions(e.category)}</select></label>
+          <div class="space-y-1.5"><label class="block space-y-1"><span class="${lab}">Nhãn ghi chú (không bắt buộc)</span><input value="${attrQ(e.note)}" oninput="state.foodEdit.note=this.value;" maxlength="40" class="field" placeholder="VD: Đặt trước 2H" /></label>
+            <div class="flex flex-wrap gap-2">${['Đặt trước', 'Món mới', 'Cay', 'Buổi sáng'].map(t => `<button type="button" onclick="state.foodEdit.note='${t}'; render();" class="px-3 rounded-full border text-[13px] font-bold ${e.note === t ? 'bg-rose-100 border-rose-300 text-rose-700' : 'bg-white text-gray-600'}">${t}</button>`).join('')}${e.note ? `<button type="button" onclick="state.foodEdit.note=''; render();" class="px-3 rounded-full border text-[13px] font-bold text-gray-500 bg-white">Xóa nhãn</button>` : ''}</div></div>
+          <label class="block space-y-1"><span class="${lab}">Mô tả món (không bắt buộc)</span><textarea oninput="state.foodEdit.description=this.value;" maxlength="300" class="field min-h-20" placeholder="VD: Gà ta nướng mật ong, ăn kèm xôi">${escQ(e.description)}</textarea></label>
+          <div class="space-y-1"><span class="${lab}">Tùy chọn cho khách</span><button type="button" onclick="openOptEditor('${f.id}')" class="w-full border-2 border-dashed border-emerald-400 text-emerald-700 rounded-xl py-3 text-[14px] font-extrabold bg-emerald-50">⚙️ ${(f.groups || []).length ? 'Sửa' : 'Thêm'} tùy chọn (topping, đá, đường, mức cay...)</button><p class="text-[13px] ${(f.groups || []).length ? 'text-emerald-800 font-bold' : 'text-gray-500'}">${(f.groups || []).length ? '✓ ' + escQ(groupsSummary(f.groups)) : 'Chưa có tùy chọn nào.'}</p><p class="text-[13px] text-gray-400">Tùy chọn được lưu riêng khi bạn bấm Lưu trong cửa sổ tùy chọn.</p></div>
+          <button type="button" onclick="if (confirm('Xóa món &quot;${attrQ(f.name).replace(/'/g, '')}&quot; khỏi thực đơn?')) { state.foodEdit=null; deleteFood('${f.id}'); }" class="w-full border border-rose-300 text-rose-600 rounded-xl py-3 text-[14px] font-bold bg-white">🗑 Xóa món này</button>
+        </div>
+        <div class="flex gap-2 px-4 py-3 border-t shrink-0 bg-white"><button onclick="state.foodEdit=null; render();" class="flex-1 py-3.5 border rounded-xl text-[14px] font-bold">Hủy</button><button onclick="saveFoodEdit()" class="flex-[2] py-3.5 bg-emerald-700 text-white rounded-xl text-[15px] font-extrabold shadow">Lưu thay đổi</button></div>
+      </div></div>`;
+    }
     function deleteFood(foodId) {
       state.foods = state.foods.filter(x => x.id !== foodId);
       saveState();
@@ -1567,63 +1680,43 @@
       const myStoreOrders = state.orders.filter(o => o.storeId === state.profile.myStoreId);
       const myOrders = state.orders.filter(o => state.user && o.customerId === state.user.id);
 
+      const browsingH = !state.searchQuery && state.selectedCategory === 'Tất cả', rankedH = hotFoods(visibleFoods);
+      const featured = browsingH ? computeFeatured() : [];
       let html = `
-        ${state.activeTab === 'home' ? heroBannerHtml() : ''}
-        <!-- HEADER -->
-        ${state.activeTab === 'home' ? `<header class="sticky top-0 z-30 bg-white text-gray-900 shadow-md">
-          <div class="px-4 py-2 space-y-1.5">
-            <div class="flex items-center justify-between gap-2">
-              <div class="flex items-center gap-2.5 min-w-0">
-                <div class="w-10 h-10 rounded-full bg-emerald-700 text-white flex items-center justify-center font-black text-[15px] shrink-0">SF</div>
-                <div class="min-w-0"><h1 class="font-black text-xl leading-none text-gray-900">ShopFood</h1></div>
-              </div>
-              <button onclick="openCart()" class="bg-emerald-700 text-white rounded-full pl-4 pr-2 flex items-center gap-2 text-[15px] font-extrabold shrink-0 shadow-md">Giỏ hàng <span class="bg-white text-emerald-700 rounded-full min-w-[28px] h-7 px-1 flex items-center justify-center text-[14px] font-black">${cartCount()}</span></button>
-            </div>
-            ${state.activeTab === 'home' ? `
-            <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] text-gray-400 pointer-events-none">🔍</span>
-              <input value="${escQ(state.searchQuery)}" oninput="state.searchQuery=this.value; render();" placeholder="Hôm nay bạn muốn ăn gì?" enterkeyhint="search" autocomplete="off" class="w-full bg-gray-100 border border-gray-200 text-gray-900 pl-11 pr-28 rounded-full text-[15px] outline-none focus:border-emerald-600 focus:bg-white" style="min-height:48px" />
-              <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-                ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" aria-label="Xóa tìm kiếm" class="w-11 h-11 rounded-full text-gray-400 font-bold">✕</button>` : ''}
-                <button onclick="startVoiceRecognition()" aria-label="Tìm bằng giọng nói" class="w-11 h-11 rounded-full flex items-center justify-center text-xl ${state.isListening ? 'bg-rose-500 text-white animate-pulse' : 'bg-amber-400 text-emerald-950'}">🎙️</button>
-              </div>
-            </div>
-            ${state.isListening ? '<p class="text-[13px] text-rose-600 font-bold text-center">🎙️ Đang nghe... hãy nói tên món bạn muốn (bấm micro để dừng)</p>' : ''}` : ''}
-          </div>
-        </header>` : ''}
+        ${state.activeTab === 'home' ? homeTopHtml(featured) : ''}
 
         <!-- MAIN CONTENT (4 TABS) -->
-        <main class="px-3 ${state.activeTab === 'home' ? 'pt-3' : 'pt-5'} space-y-4">
+        <main class="px-3 ${state.activeTab === 'home' ? 'pt-4' : 'pt-5'} space-y-5">
       `;
 
       // TAB 1: TRANG CHỦ
       if (state.activeTab === 'home') {
-        const browsing = !state.searchQuery && state.selectedCategory === 'Tất cả';
-        const ranked = hotFoods(visibleFoods);
-        const top = browsing ? ranked.filter(f => foodOk(f) && (state.sales[f.id] || 0) > 0).slice(0, 6) : [];
-        const topIds = new Set(top.map(f => f.id));
+        const browsing = browsingH, ranked = rankedH;
+        const topIds = new Set(featured.map(f => f.id));
         newIds = new Set(browsing ? visibleFoods.filter(f => foodOk(f) && !topIds.has(f.id)).slice(0, 6).map(f => f.id) : []);
         const fresh = visibleFoods.filter(f => newIds.has(f.id));
-        const rest = browsing ? ranked.filter(f => !topIds.has(f.id)) : ranked;
+        const showFresh = fresh.length >= 3 && featured.length > 0, freshIds = new Set(showFresh ? fresh.map(f => f.id) : []);
+        const rest = browsing ? ranked.filter(f => !topIds.has(f.id) && !freshIds.has(f.id)) : ranked;
         const shops = [...state.stores].sort((a, b) => (b.isOpen ? 1 : 0) - (a.isOpen ? 1 : 0));
-        const gridTitle = state.searchQuery ? 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)' : state.selectedCategory !== 'Tất cả' ? '🔥 ' + state.selectedCategory + ' bán chạy' : (top.length ? '😋 Tất cả món ngon' : '🔥 Món nổi bật');
+        const h3 = 'font-display text-[21px] leading-tight font-bold text-bark';
+        const gridTitle = state.searchQuery ? 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)' : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : (featured.length ? 'Tất cả món ngon' : 'Món nổi bật');
+        const skel = '<div class="bg-white rounded-2xl border border-black/5 overflow-hidden animate-pulse"><div class="h-36 bg-gray-200"></div><div class="p-3 space-y-2"><div class="h-3 bg-gray-200 rounded w-4/5"></div><div class="h-3 bg-gray-200 rounded w-2/5"></div></div></div>';
         html += `
-          ${browsing && shops.length > 1 ? `<section class="space-y-2"><h3 class="font-extrabold text-[16px] text-gray-900">🏪 Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3 overflow-x-auto no-scrollbar -mx-1 px-1">${shops.map(st => `<button onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[68px] flex flex-col items-center gap-1"><span class="relative"><img src="${st.image}" loading="lazy" class="w-14 h-14 rounded-full object-cover border-2 ${st.isOpen ? 'border-orange-400' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-bold text-gray-700 line-clamp-1 w-full text-center">${st.name}</span></button>`).join('')}</div></section>` : ''}
           ${categoryBarHtml()}
-          ${state.stores.length === 0 ? `
+          ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1">${shops.map(st => `<button onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[72px] flex flex-col items-center gap-1.5"><span class="relative"><img src="${st.image}" loading="lazy" class="w-16 h-16 rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span></button>`).join('')}</div></section>` : ''}
+          ${state.stores.length === 0 && state.cloudLoaded ? `
             <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center space-y-2">
               <p class="text-[13px] text-gray-600">Chưa có cửa hàng nào trong khu vực này.</p>
-              <button onclick="setTab('mystore')" class="bg-emerald-700 text-white px-4 py-2 rounded-xl text-[13px] font-bold">✨ Đăng ký Mở Quán Ngay</button>
+              <button onclick="setTab('mystore')" class="bg-emerald-700 text-white px-4 py-2 rounded-xl text-[13px] font-bold">Đăng ký mở quán ngay</button>
             </div>` : ''}
-          ${top.length ? `<section class="space-y-2"><div class="flex items-end justify-between"><h3 class="font-extrabold text-[16px] text-gray-900">🔥 Bán chạy nhất</h3><span class="text-[13px] text-gray-400">Nhiều người đã đặt</span></div><div data-scroll="top" class="flex gap-2.5 overflow-x-auto no-scrollbar -mx-3 px-3 pb-1">${top.map(foodMiniCardHtml).join('')}</div></section>` : ''}
-          ${fresh.length >= 3 && top.length ? `<section class="space-y-2"><div class="flex items-end justify-between"><h3 class="font-extrabold text-[16px] text-gray-900">✨ Món mới lên kệ</h3><span class="text-[13px] text-gray-400">Thử ngay hôm nay</span></div><div data-scroll="fresh" class="flex gap-2.5 overflow-x-auto no-scrollbar -mx-3 px-3 pb-1">${fresh.map(foodMiniCardHtml).join('')}</div></section>` : ''}
-          <section class="space-y-2">
-            ${rest.length || !top.length ? `<h3 class="font-extrabold text-[16px] text-gray-900">${gridTitle}</h3>` : ''}
-            <div class="grid grid-cols-2 gap-2.5">
-              ${rest.length ? rest.map(foodCardHtml).join('') : (top.length ? '' : `
+          ${showFresh ? `<section class="space-y-2.5"><div class="flex items-end justify-between gap-2"><h3 class="${h3}">Món mới lên kệ</h3><span class="text-[13px] text-gray-500">Thử ngay hôm nay</span></div><div data-scroll="fresh" class="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 pb-1.5">${fresh.map(foodMiniCardHtml).join('')}</div></section>` : ''}
+          <section class="space-y-2.5">
+            ${rest.length || !featured.length ? `<h3 class="${h3}">${gridTitle}</h3>` : ''}
+            <div class="grid grid-cols-2 gap-3">
+              ${rest.length ? rest.map(foodCardHtml).join('') : (featured.length ? '' : (!state.cloudLoaded && !state.foods.length ? skel + skel + skel + skel : `
                 <div class="col-span-2 bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-500">
-                  ${state.searchQuery ? 'Chưa thấy món nào khớp với "' + escQ(state.searchQuery) + '". Bạn thử từ khác hoặc <button onclick="state.searchQuery=\'\'; render();" class="text-emerald-700 font-bold underline">xem tất cả món</button> nhé.' : 'Chưa có món ăn nào. Hãy chờ chủ quán đăng món nhé!'}
-                </div>`)}
+                  ${state.searchQuery ? 'Chưa thấy món nào khớp với "' + escQ(state.searchQuery) + '". Bạn thử từ khác hoặc <button onclick="state.searchQuery=\'\'; render();" class="text-gac font-bold underline">xem tất cả món</button> nhé.' : 'Chưa có món ăn nào. Hãy chờ chủ quán đăng món nhé!'}
+                </div>`))}
             </div>
           </section>
         `;
@@ -1700,6 +1793,7 @@
       if (state.viewStoreId) html += storePageHtml();
       if (state.showStoreQR && state.viewStoreId) html += storeQrSheetHtml();
       if (state.sizePick) html += sizePickerHtml();
+      if (state.foodEdit) html += foodEditHtml();
       if (state.optEdit) html += optEditorHtml();
       if (state.showInstallHelp) html += installHelpHtml();
 
