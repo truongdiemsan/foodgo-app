@@ -249,8 +249,7 @@
     const normPhone = p => { let d = String(p || '').replace(/\D/g, ''); return d.startsWith('84') ? '0' + d.slice(2) : d; };
     function requireLogin() {
       if (!supabaseClient || state.user) return true;
-      if (state.tableCtx) { ensureSession().then(ok => { if (!ok) { state.showCheckout = false; state.showAuth = true; render(); } }); return true; }
-      state.showAuth = true; render(); return false;
+      return true; // khách đặt món không cần đăng nhập, phiên ẩn danh được tạo khi bấm chốt đơn
     }
     async function authSubmit() {
       if (!supabaseClient) return showToast('Chưa kết nối được máy chủ.');
@@ -398,6 +397,7 @@
         ${s.suspended ? '<div class="rounded-xl bg-rose-100 text-rose-800 p-3 text-[13px] font-bold">⛔ Quán đang bị tạm ẩn vì quá hạn đóng phí. Đóng xong, quản trị sẽ mở lại.</div>' : ''}
         ${tableRequestsHtml()}
         ${profileCardHtml(s)}
+        ${appQrCardHtml()}
         ${tablesCardHtml(s)}
         <div class="${card} flex items-center justify-between"><span>🔔 Âm báo đơn mới: <b class="${state.soundOn ? 'text-emerald-700' : 'text-gray-500'}">${state.soundOn ? 'ĐANG BẬT' : 'đang tắt'}</b>${pendingCount() ? ` · <b class="text-rose-600">${pendingCount()} đơn chờ xác nhận</b>` : ''}</span><button onclick="toggleSound()" class="px-2.5 py-1 rounded-lg text-[13px] font-bold ${state.soundOn ? 'border border-gray-300 text-gray-600' : 'bg-amber-400 text-emerald-950'}">${state.soundOn ? 'Tắt' : 'Bật'}</button></div>
         <div class="${card}">
@@ -631,7 +631,7 @@
     // ===== NÚT CHỐT ĐƠN CHỈ SÁNG KHI ĐÃ ĐIỀN ĐỦ THÔNG TIN =====
     function checkoutReady() {
       if (state.tableCtx) return true;
-      return state.checkoutName.trim().length > 0 && normPhone(state.checkoutPhone).length >= 9
+      return normPhone(state.checkoutPhone).length >= 9
         && (state.fulfillmentMethod !== 'DELIVERY' || state.checkoutAddress.trim().length > 0);
     }
     function updateCheckoutBtn() {
@@ -753,7 +753,8 @@
     async function ensureSession() {
       if (state.user) return true;
       if (!supabaseClient) return false;
-      const { error } = await supabaseClient.auth.signInAnonymously();
+      const { data, error } = await supabaseClient.auth.signInAnonymously();
+      if (!error && data && data.user) state.user = { id: data.user.id, email: data.user.email };
       return !error;
     }
     async function callStaff(kind) {
@@ -812,6 +813,21 @@
         + Array.from({ length: n }, (_, i) => '<div class="c"><h2>Bàn ' + (i + 1) + '</h2><img width="260" height="260" src="' + qrImg(tableLink(s.id, i + 1), 260) + '"/><p>Quét mã để gọi món, gọi nhân viên, thanh toán</p></div>').join('')
         + '</div><script>setTimeout(function(){print()},1000)<\/script></body></html>');
       w.document.close();
+    }
+    const appBaseUrl = () => location.origin + location.pathname;
+    function printAppQR() {
+      const s = state.stores.find(x => x.id === state.profile.myStoreId), w = window.open('', '_blank');
+      if (!w) return showToast('Trình duyệt đang chặn cửa sổ in. Hãy cho phép rồi thử lại.');
+      w.document.write('<html><head><meta charset="utf-8"><title>QR đặt món</title><style>body{font-family:sans-serif;text-align:center;padding:24px}h1{font-size:34px;margin:8px 0}p{font-size:20px;margin:6px 0}</style></head><body><h1>' + (s ? s.name : 'ShopFood') + '</h1><p>Quét mã để chọn món và đặt hàng</p><img width="420" height="420" src="' + qrImg(appBaseUrl(), 420) + '"/><p>Chọn món, nhập số điện thoại và địa chỉ, bấm Hoàn thành đơn</p><script>setTimeout(function(){print()},1000)<\/script></body></html>');
+      w.document.close();
+    }
+    function appQrCardHtml() {
+      return `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm text-[13px]">
+        <h3 class="font-extrabold text-sm text-gray-800">📱 Mã QR đặt món cho khách</h3>
+        <p class="text-gray-500">Khách quét mã là mở ngay trang chủ ShopFood, chọn món, nhập số điện thoại và địa chỉ rồi bấm Hoàn thành đơn. Không cần đăng nhập.</p>
+        ${location.protocol === 'file:' ? '<p class="text-rose-600 font-bold">⚠️ App đang mở từ file trên máy nên mã QR chưa dùng được. Hãy mở app từ địa chỉ web.</p>' : `<div class="text-center"><img src="${qrImg(appBaseUrl(), 220)}" class="w-40 h-40 border rounded-lg inline-block" /><p class="text-[13px] text-gray-400 break-all">${appBaseUrl()}</p></div>
+        <button onclick="printAppQR()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">🖨️ In mã QR</button>`}
+      </div>`;
     }
     function tablesCardHtml(s) {
       const n = state.tableCount;
@@ -1149,11 +1165,12 @@
       order.items.forEach(i => { const k = i.cartKey || i.foodId, e = state.cart.find(x => x.cartKey === k); if (e) e.quantity += i.quantity; else state.cart.push({ ...i, cartKey: k }); }); saveState(); state.showCart = true; render();
     }
 
-    function placeOrder() {
-      if (!checkoutReady()) { showToast('Vui lòng điền đủ họ tên, số điện thoại hợp lệ và địa chỉ giao.'); return; }
-      const name = state.checkoutName.trim() || (state.tableCtx ? 'Khách bàn ' + state.tableCtx.table : ''), phone = state.checkoutPhone.trim();
+    async function placeOrder() {
+      if (!checkoutReady()) { showToast('Vui lòng nhập số điện thoại hợp lệ và địa chỉ giao.'); return; }
+      if (supabaseClient && !state.user && !(await ensureSession())) { state.showCheckout = false; state.showAuth = true; render(); showToast('Chưa tạo được phiên đặt món. Hãy đăng nhập rồi thử lại.'); return; }
+      const name = state.checkoutName.trim() || (state.tableCtx ? 'Khách bàn ' + state.tableCtx.table : 'Khách'), phone = state.checkoutPhone.trim();
       const address = state.tableCtx ? 'Bàn ' + state.tableCtx.table : state.fulfillmentMethod === 'DELIVERY' ? state.checkoutAddress.trim() : 'Khách đến lấy lúc ' + state.pickupTime;
-      if (!state.tableCtx && (!name || !phone || (state.fulfillmentMethod === 'DELIVERY' && !address))) { showToast('Vui lòng điền đủ thông tin nhận hàng.'); return; }
+      if (!state.tableCtx && (!phone || (state.fulfillmentMethod === 'DELIVERY' && !address))) { showToast('Vui lòng điền đủ thông tin nhận hàng.'); return; }
       const now = new Date().toISOString(), ids = [];
       cartGroups().forEach(g => {
         const st = state.stores.find(s => s.id === g.storeId);
@@ -1540,14 +1557,14 @@
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl p-4 max-h-[90vh] overflow-y-auto shadow-2xl" data-scroll="s2">
-              <div class="flex justify-between items-center pb-2 border-b"><h3 class="font-extrabold text-base">Xác nhận đặt đơn nhanh</h3><button onclick="state.showCheckout=false; render();" class="text-gray-400 font-bold">✕</button></div>
+              <div class="flex justify-between items-center pb-2 border-b"><h3 class="font-extrabold text-base">Hoàn thành đơn hàng</h3><button onclick="state.showCheckout=false; render();" class="text-gray-400 font-bold">✕</button></div>
               <div class="space-y-3 mt-3">
                 ${state.tableCtx ? `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[15px] font-black text-emerald-900">🍽️ Đặt tại Bàn ${state.tableCtx.table}</div>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Tên của bạn (không bắt buộc)</span><input value="${state.checkoutName}" oninput="state.checkoutName=this.value;" class="field" placeholder="VD: Anh Nam" /></label>` : `<div class="bg-slate-100 p-1 rounded-xl flex gap-1">
                   <button onclick="state.fulfillmentMethod='DELIVERY'; render();" class="flex-1 py-1.5 rounded-lg text-[13px] font-bold ${state.fulfillmentMethod==='DELIVERY'?'bg-emerald-700 text-white':''}">🛵 Giao tận nơi</button>
                   <button onclick="state.fulfillmentMethod='PICKUP'; render();" class="flex-1 py-1.5 rounded-lg text-[13px] font-bold ${state.fulfillmentMethod==='PICKUP'?'bg-emerald-700 text-white':''}">🛍️ Tới lấy</button>
                 </div>
-                <label class="block space-y-1"><span class="text-[13px] font-bold">Họ và tên *</span><input value="${state.checkoutName}" oninput="state.checkoutName=this.value; updateCheckoutBtn();" class="field" /></label>
+                <label class="block space-y-1"><span class="text-[13px] font-bold">Họ và tên (không bắt buộc)</span><input value="${state.checkoutName}" oninput="state.checkoutName=this.value; updateCheckoutBtn();" class="field" /></label>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Số điện thoại *</span><input value="${state.checkoutPhone}" oninput="state.checkoutPhone=this.value; updateCheckoutBtn();" class="field" /></label>
                 ${state.fulfillmentMethod==='DELIVERY' ? `<label class="block space-y-1"><span class="text-[13px] font-bold">Địa chỉ giao *</span><textarea oninput="state.checkoutAddress=this.value; updateCheckoutBtn();" class="field">${state.checkoutAddress}</textarea></label>` : ''}`}
                 ${checkoutSummaryHtml()}
@@ -1558,8 +1575,8 @@
                 </div>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Ghi chú cho quán (không bắt buộc)</span><textarea oninput="state.checkoutNote=this.value;" class="field min-h-16" placeholder="VD: ít cay, thêm hành, giao sau 18h, gọi trước khi đến...">${state.checkoutNote.replace(/</g, '&lt;')}</textarea></label>
                 <label class="flex gap-2 text-[13px] text-gray-600"><input type="checkbox" ${state.checkoutConsent ? 'checked' : ''} onchange="state.checkoutConsent=this.checked" /> Đồng ý nhận tin ưu đãi từ quán qua Zalo/SMS</label>
-                <button id="chotBtn" onclick="placeOrder()" ${checkoutReady() ? '' : 'disabled'} class="w-full py-3.5 rounded-xl text-[13px] font-extrabold ${checkoutReady() ? 'bg-emerald-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}">Chốt ${cartGroups().length > 1 ? cartGroups().length + ' đơn' : 'đơn'} · ${money(total)}</button>
-                <p id="chotHint" class="text-[13px] text-rose-500 text-center ${checkoutReady() ? 'hidden' : ''}">Điền đủ họ tên, số điện thoại${state.fulfillmentMethod === 'DELIVERY' ? ', địa chỉ giao' : ''} để chốt đơn.</p>
+                <button id="chotBtn" onclick="placeOrder()" ${checkoutReady() ? '' : 'disabled'} class="w-full py-3.5 rounded-xl text-[13px] font-extrabold ${checkoutReady() ? 'bg-emerald-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}">Hoàn thành ${cartGroups().length > 1 ? cartGroups().length + ' đơn' : 'đơn'} · ${money(total)}</button>
+                <p id="chotHint" class="text-[13px] text-rose-500 text-center ${checkoutReady() ? 'hidden' : ''}">Nhập số điện thoại${state.fulfillmentMethod === 'DELIVERY' ? ', địa chỉ giao' : ''} để hoàn thành đơn.</p>
               </div>
             </div>
           </div>
