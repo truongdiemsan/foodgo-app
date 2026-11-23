@@ -1430,7 +1430,6 @@
       // TAB 1: TRANG CHỦ
       if (state.activeTab === 'home') {
         html += `
-          ${installBannerHtml()}
           ${state.searchQuery ? '' : `<div class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 items-center"><span class="shrink-0 text-[13px] text-gray-500 font-bold">Gợi ý:</span>${['Trà sữa', 'Cơm', 'Bún', 'Lẩu', 'Bánh mì', 'Cà phê'].map(t => `<button onclick="state.searchQuery='${t}'; render();" class="shrink-0 px-3 rounded-full bg-orange-50 border border-orange-200 text-orange-700 text-[13px] font-bold">${t}</button>`).join('')}</div>`}
           ${categoryBarHtml()}
 
@@ -1745,4 +1744,3 @@
   </script>
 </body>
 </html>
-  
