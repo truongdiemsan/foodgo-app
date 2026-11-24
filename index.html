@@ -161,7 +161,7 @@
       checkoutNote: '',
       toast: '',
       isListening: false, user: null, feePayments: [], isAdmin: false, soundOn: (() => { try { return localStorage.getItem('fg_sound') !== '0'; } catch { return true; } })(), showCart: false, viewStoreId: '', sales: {}, ratings: {}, myReviews: {}, infoFoodId: '', foodStats: {}, openOrderId: '', tableCtx: null, sizePick: '', canInstall: false, showInstallHelp: false, installDismissed: (() => { try { const t = parseInt(localStorage.getItem('fg_install_dismiss') || '0'); return !!(t && Date.now() - t < 7 * 864e5); } catch { return false; } })(), tableReq: {}, tableOpen: [], tableCount: (() => { try { return parseInt(localStorage.getItem('fg_tables') || '0') || 0; } catch { return 0; } })(), showAuth: false, authMode: 'login', authEmailMode: false, authShowPass: false, authPhone: savedProfile.phone, authPass: '', checkoutConsent: false,
-      showMapPicker: false
+      showMapPicker: false, promos: [], promoReport: [], promoReady: null, adminPromoOpen: false, promoForm: null
     };
 
     state.storeCat = 'Tất cả'; state.storeInfoOpen = false; state.showStoreQR = false; state.manageStoreId = ''; state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
@@ -208,6 +208,7 @@
         detectNewOrders();
         saveState();
         render();
+        loadPromoReport();
       } catch (err) {
         console.error('Lỗi đồng bộ Cloud:', err);
         state.cloudLoaded = true; render();
@@ -346,6 +347,7 @@
     // ===== PHÍ THÁNG · BỘ ĐẾM ĐƠN · QUẢN TRỊ · BÁO ĐƠN MỚI =====
     const DUE_DAY = 10, GRACE = 3; // hạn đóng: ngày 10 tháng sau; ẩn quán nếu trễ quá 3 ngày
     const PLATFORM_PAY = 'STK: (điền số tài khoản của bạn) - Chủ TK: (tên)'; // hiện cho quán khi cần đóng phí
+    const PLATFORM_ZALO = '';   // số điện thoại/Zalo của chủ app, VD '0912345678'. Hiện nút Gọi và Zalo cho chủ quán muốn mua quảng bá. Để trống thì chỉ hiện lời nhắn liên hệ.
     const COUNTED = ['CONFIRMED', 'DELIVERING', 'COMPLETED']; // chỉ tính đơn quán đã xác nhận
     const feeFor = n => n <= 30 ? 0 : n <= 100 ? 99000 : n <= 200 ? 199000 : n <= 400 ? 349000 : 499000;
     const ymOf = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
@@ -557,6 +559,7 @@
           ${row('Thông báo hệ thống', np === 'granted' ? 'Hiện cả khi bạn đang mở ứng dụng khác' : np === 'denied' ? 'Đang bị chặn trong trình duyệt' : np === 'none' ? 'Máy này chưa hỗ trợ' : 'Chưa bật', np === 'granted', np === 'default' ? 'requestNotif()' : "showToast('Hãy đổi quyền thông báo trong Cài đặt trình duyệt.')", np === 'granted' ? 'Đã bật' : 'Bật')}
           ${row('Giữ sáng màn hình', 'Khuyên dùng khi để điện thoại hoặc máy tính bảng ở quầy', state.wakeOn, 'toggleWake()', state.wakeOn ? 'Đang bật' : 'Bật')}
           <p class="text-gray-500 pt-1">Số đơn chờ xác nhận hiện trên biểu tượng app (khi đã thêm ra màn hình chính). Để nhận cảnh báo ổn định, hãy để app mở và đừng tắt hẳn trình duyệt.</p></div>`)}
+        ${sec('promo', '📣', 'Quảng bá trên trang chủ', (state.promoReport || []).some(r => r.storeId === s.id && promoLive(r)) ? ' <span class="text-green-700">●</span>' : '', () => ownerPromoHtml(s))}
         ${sec('page', '🏪', 'Trang giới thiệu quán', '', () => profileCardHtml(s))}
         ${sec('qr', '📱', 'Mã QR quán và bàn', '', () => appQrCardHtml() + tablesCardHtml(s))}
         ${sec('ship', '🚚', 'Giao hàng và nhận tiền', '', () => `<div class="${card}">
@@ -594,6 +597,7 @@
         <div class="rounded-2xl bg-emerald-900 text-white p-4"><p class="text-[13px] text-emerald-200 font-bold">QUẢN TRỊ NỀN TẢNG</p>
           <p class="text-sm font-black">${rows.length} quán · phí tạm tính tháng này ${money(rows.reduce((a, r) => a + feeFor(r.n), 0))}</p>
           <button onclick="hideOverdue()" class="mt-2 bg-amber-400 text-emerald-950 px-3 py-1.5 rounded-lg text-[13px] font-extrabold">Ẩn các quán quá hạn</button></div>
+        ${adminPromoHtml()}
         ${rows.map(r => `<div class="bg-white rounded-2xl border p-3 text-[13px] space-y-1.5 shadow-sm">
           <div class="flex justify-between"><b>${r.s.name}</b><span class="text-gray-500">${r.n} đơn tháng này</span></div>
           <p class="text-gray-500">SĐT: ${r.s.phone}${r.s.suspended ? ' · <b class="text-rose-600">đang ẩn</b>' : ''}</p>
@@ -826,6 +830,212 @@
           <div class="mt-auto pt-1"><span class="block text-[17px] font-extrabold text-gac">${priceText(f)}</span></div>
         </div></div>`;
     }
+    // ===== QUẢNG BÁ TRÊN TRANG CHỦ: vị trí vàng, vị trí bạc, đầu danh sách quán =====
+    // Chủ app tạo gói trong tab Quản trị. Khách thấy thẻ có nhãn "Tài trợ". Chủ quán xem kết quả trong Quản lý quán.
+    const PROMO_SLOTS = {
+      gold:   { icon: '⭐', name: 'Vị trí vàng', where: 'Thẻ đầu tiên trên trang chủ. Khách mở app là thấy ngay.', base: 199000 },
+      silver: { icon: '✨', name: 'Vị trí bạc', where: 'Thẻ thứ 3 trong phần món nổi bật, tự lướt tới sau vài giây.', base: 99000 },
+      strip:  { icon: '🏪', name: 'Đầu danh sách quán', where: 'Quán được xếp đầu danh sách "Quán quanh bạn".', base: 49000 }
+    };
+    // Giá gợi ý theo 7 ngày (đồng). Chỉ là gợi ý để Admin tham khảo, Admin tự nhập số tiền thật khi tạo gói.
+    const promoSuggest = (slot, days) => Math.round((PROMO_SLOTS[slot] || PROMO_SLOTS.strip).base * (days / 7) * (days >= 30 ? 0.75 : days >= 14 ? 0.9 : 1) / 1000) * 1000;
+    const PROMO_SEED = String(Math.random());   // mỗi lần mở app xếp lại thứ tự các quán cùng mua một vị trí, để công bằng
+    const promoRank = p => { let h = 0; const s = p.id + PROMO_SEED; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; };
+    const promoLive = p => { const t = Date.now(); return new Date(p.startsAt).getTime() <= t && new Date(p.endsAt).getTime() > t; };
+    const activePromos = () => (state.promos || []).filter(promoLive);
+    const stripPromoOf = storeId => activePromos().filter(p => p.slot === 'strip' && p.storeId === storeId)[0] || null;
+    async function loadPromos() {
+      if (!supabaseClient) return;
+      try {
+        const r = await supabaseClient.rpc('active_promos');
+        state.promos = r.error ? [] : (r.data || []).map(p => ({ id: p.id, storeId: p.store_id, foodId: p.food_id, slot: p.slot, startsAt: p.starts_at, endsAt: p.ends_at }));
+      } catch { state.promos = []; }
+    }
+    const n0 = v => Number(v) || 0;
+    const mapPromoRow = r => ({ promoId: r.promo_id, storeId: r.store_id, foodId: r.food_id, slot: r.slot, startsAt: r.starts_at, endsAt: r.ends_at, price: n0(r.price), note: r.note || '',
+      views: n0(r.views), clicks: n0(r.clicks), orders: n0(r.orders), revenue: n0(r.revenue), storeOrders: n0(r.store_orders), storeRevenue: n0(r.store_revenue), prevOrders: n0(r.prev_orders), prevRevenue: n0(r.prev_revenue) });
+    async function loadPromoReport() {
+      if (!supabaseClient || !state.user) return;
+      if (!state.isAdmin && !ownStoreId()) { if ((state.promoReport || []).length) { state.promoReport = []; render(); } return; }
+      let rows = [], ready = false;
+      try { const r = await supabaseClient.rpc('promo_report', { p_store: null }); if (!r.error) { ready = true; rows = (r.data || []).map(mapPromoRow); } } catch {}
+      const same = ready === state.promoReady && JSON.stringify(rows) === JSON.stringify(state.promoReport);
+      state.promoReport = rows; state.promoReady = ready;
+      if (!same) render();
+    }
+    async function refreshPromos() { await Promise.all([loadPromos(), loadPromoReport()]); render(); }
+
+    // Hai thẻ tài trợ trong dải món nổi bật: vàng ở vị trí số 1, bạc ở vị trí số 3. Chỉ hiện khi món còn bán và quán đang mở.
+    function sponsoredHero() {
+      const out = {}, taken = new Set(), live = activePromos();
+      ['gold', 'silver'].forEach(slot => {
+        const c = live.filter(p => p.slot === slot && p.foodId)
+          .map(p => ({ p, f: state.foods.find(x => x.id === p.foodId) }))
+          .filter(x => x.f && x.f.storeId === x.p.storeId && foodOk(x.f) && !(state.stores.find(s => s.id === x.f.storeId) || {}).suspended && !taken.has(x.f.id))
+          .sort((a, b) => promoRank(a.p) - promoRank(b.p))[0];
+        if (c) { out[slot] = { ...c.f, _ad: c.p.id }; taken.add(c.f.id); }
+      });
+      return out;
+    }
+    // Quán mua "Đầu danh sách": đứng trước, chỉ khi đang mở cửa. Quán còn lại giữ thứ tự cũ (đang mở trước, nghỉ sau).
+    function orderedShops() {
+      const open = (a, b) => (b.isOpen ? 1 : 0) - (a.isOpen ? 1 : 0);
+      const sp = state.stores.filter(s => s.isOpen && !s.suspended && stripPromoOf(s.id)).sort((a, b) => promoRank(stripPromoOf(a.id)) - promoRank(stripPromoOf(b.id)));
+      const ids = new Set(sp.map(s => s.id));
+      return [...sp, ...state.stores.filter(s => !ids.has(s.id)).sort(open)];
+    }
+
+    // --- Đếm lượt xem, lượt bấm, đơn đặt ---
+    const adSeen = (() => { try { return JSON.parse(sessionStorage.getItem('fg_adseen') || '{}'); } catch { return {}; } })();
+    function adSelf(promoId) {   // không tính lượt của chính chủ quán và Admin
+      if (state.isAdmin) return true;
+      const p = (state.promos || []).find(x => x.id === promoId), st = p && state.stores.find(s => s.id === p.storeId);
+      return !!(st && state.user && st.ownerId === state.user.id);
+    }
+    function logPromo(id, ev, value) {
+      if (!supabaseClient || !id || adSelf(id)) return;
+      const now = Date.now(), k = id + ':' + ev;
+      if (ev !== 'order') {
+        if (adSeen[k] && now - adSeen[k] < (ev === 'view' ? 30 * 60e3 : 1500)) return;
+        adSeen[k] = now; try { sessionStorage.setItem('fg_adseen', JSON.stringify(adSeen)); } catch {}
+      }
+      try { supabaseClient.rpc('log_promo', { p_promo: id, p_event: ev, p_value: Math.round(value || 0) }).then(() => {}, () => {}); } catch {}
+    }
+    const adRefGet = () => { try { return JSON.parse(localStorage.getItem('fg_adref') || '{}'); } catch { return {}; } };
+    const adRefSet = o => { try { localStorage.setItem('fg_adref', JSON.stringify(o)); } catch {} };
+    function adClicked(id) {
+      const p = (state.promos || []).find(x => x.id === id); if (!p || adSelf(id)) return;
+      logPromo(id, 'click');
+      const r = adRefGet(); r[p.storeId] = { id, at: Date.now() }; adRefSet(r);   // nhớ khách đến từ quảng cáo này, để tính đơn đặt trong 24 giờ
+    }
+    function adOrder(storeId, value) {
+      const r = adRefGet(), x = r[storeId]; if (!x || Date.now() - x.at > 864e5) return;
+      logPromo(x.id, 'order', value); delete r[storeId]; adRefSet(r);
+    }
+    document.addEventListener('click', e => { const el = e.target && e.target.closest && e.target.closest('[data-ad]'); if (el) adClicked(el.dataset.ad); }, true);
+    let adIO = null, adTimers = {};
+    const adCanCount = () => !document.hidden && state.activeTab === 'home' && !state.viewStoreId && !state.showCart && !state.showCheckout && !state.sizePick && !state.optEdit && !state.showAuth;
+    function observeAds() {   // một lượt xem = thẻ quảng cáo hiện rõ trên màn hình ít nhất 1 giây
+      if (adIO) adIO.disconnect(); Object.values(adTimers).forEach(clearTimeout); adTimers = {};
+      if (!supabaseClient || !window.IntersectionObserver) return;
+      const els = document.querySelectorAll('[data-ad]'); if (!els.length) return;
+      adIO = new IntersectionObserver(es => es.forEach(en => {
+        const id = en.target.dataset.ad;
+        if (en.isIntersecting && en.intersectionRatio >= 0.6) { if (!adTimers[id]) adTimers[id] = setTimeout(() => { delete adTimers[id]; if (adCanCount()) logPromo(id, 'view'); }, 1000); }
+        else { clearTimeout(adTimers[id]); delete adTimers[id]; }
+      }), { threshold: [0, 0.6, 1] });
+      els.forEach(el => adIO.observe(el));
+    }
+
+    // --- Tạo, gia hạn, kết thúc gói (chỉ Admin) ---
+    const promoForm = () => state.promoForm || (state.promoForm = { storeId: '', slot: 'gold', foodId: '', days: 7, price: '', note: '' });
+    function pfSet(k, v) { const f = promoForm(); f[k] = v; if (k === 'storeId' || (k === 'slot' && v === 'strip')) f.foodId = ''; render(); }
+    function pfPrice(el) { promoForm().price = el.value; const v = parseShortPrice(el.value), p = document.getElementById('pfPricePrev'); if (p) p.textContent = v > 0 ? 'Thu: ' + money(v) : 'Bỏ trống là dùng thử miễn phí'; }
+    function pfSuggest() { const f = promoForm(); f.price = String(promoSuggest(f.slot, +f.days || 7)); render(); }
+    async function createPromo() {
+      if (!state.isAdmin || !supabaseClient) return;
+      const f = promoForm(), days = +f.days || 7;
+      if (!f.storeId) return showToast('Hãy chọn quán cần quảng bá.');
+      if (f.slot !== 'strip' && !f.foodId) return showToast('Hãy chọn món cần quảng bá.');
+      const st = state.stores.find(x => x.id === f.storeId); if (st && !st.isOpen) showToast('Lưu ý: quán đang nghỉ nên quảng cáo chưa hiện cho khách.');
+      const now = Date.now();
+      const { error } = await supabaseClient.from('promotions').insert([{ store_id: f.storeId, food_id: f.slot === 'strip' ? null : f.foodId, slot: f.slot, starts_at: new Date(now).toISOString(), ends_at: new Date(now + days * 864e5).toISOString(), price: parseShortPrice(f.price) || 0, note: f.note.trim() || null }]);
+      if (error) return showToast('Chưa tạo được gói: ' + error.message);
+      state.promoForm = { ...f, foodId: '', price: '', note: '' }; showToast('Đã bắt đầu quảng bá ' + days + ' ngày.'); refreshPromos();
+    }
+    async function extendPromo(id, days) {
+      const r = (state.promoReport || []).find(x => x.promoId === id); if (!r || !state.isAdmin) return;
+      const { error } = await supabaseClient.from('promotions').update({ ends_at: new Date(Math.max(Date.now(), new Date(r.endsAt).getTime()) + days * 864e5).toISOString() }).eq('id', id);
+      if (error) return showToast('Chưa gia hạn được: ' + error.message);
+      showToast('Đã gia hạn thêm ' + days + ' ngày.'); refreshPromos();
+    }
+    async function endPromo(id) {
+      if (!state.isAdmin || !confirm('Kết thúc gói quảng bá này ngay bây giờ? Số liệu vẫn được giữ lại.')) return;
+      const { error } = await supabaseClient.from('promotions').update({ ends_at: new Date().toISOString() }).eq('id', id);
+      if (error) return showToast('Chưa kết thúc được: ' + error.message);
+      showToast('Đã kết thúc gói quảng bá.'); refreshPromos();
+    }
+    async function deletePromo(id) {
+      if (!state.isAdmin || !confirm('Xóa gói này cùng toàn bộ số liệu của nó? Không thể khôi phục.')) return;
+      const { error } = await supabaseClient.from('promotions').delete().eq('id', id);
+      if (error) return showToast('Chưa xóa được: ' + error.message);
+      showToast('Đã xóa gói quảng bá.'); refreshPromos();
+    }
+    function rerunPromo(id) {
+      const r = (state.promoReport || []).find(x => x.promoId === id); if (!r) return;
+      state.promoForm = { storeId: r.storeId, slot: r.slot, foodId: r.foodId || '', days: 7, price: '', note: '' }; render();
+      const el = document.getElementById('promoFormTop'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // --- Hiển thị kết quả (Admin xem tất cả, chủ quán chỉ xem quán mình) ---
+    const nf = v => Number(v || 0).toLocaleString('vi-VN');
+    const dmy = t => new Date(t).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    const pctChange = (a, b) => b > 0 ? Math.round((a - b) / b * 100) : null;
+    const pctTag = d => d === null ? '' : d > 0 ? `<b class="text-green-700">▲ ${d}%</b>` : d < 0 ? `<b class="text-rose-600">▼ ${-d}%</b>` : '<b class="text-gray-600">không đổi</b>';
+    function promoReportText(r) {
+      const st = state.stores.find(x => x.id === r.storeId) || {}, f = r.foodId ? state.foods.find(x => x.id === r.foodId) : null, sl = PROMO_SLOTS[r.slot] || PROMO_SLOTS.strip;
+      const ctr = r.views > 0 ? ' (' + (r.clicks / r.views * 100).toFixed(1).replace('.', ',') + '%)' : '', sg = d => d === null ? '' : ' (' + (d > 0 ? '+' : '') + d + '%)';
+      return ['BÁO CÁO QUẢNG BÁ TRÊN SHOPFOOD', 'Quán: ' + (st.name || ''), 'Vị trí: ' + sl.name + (f ? ', món ' + f.name : ''),
+        'Thời gian: ' + new Date(r.startsAt).toLocaleDateString('vi-VN') + ' đến ' + new Date(r.endsAt).toLocaleDateString('vi-VN'), '',
+        '- Lượt khách nhìn thấy: ' + nf(r.views), '- Lượt bấm vào quảng cáo: ' + nf(r.clicks) + ctr, '- Đơn đặt từ quảng cáo: ' + nf(r.orders) + ' đơn, ' + nf(r.revenue) + 'đ',
+        '- Cả quán trong thời gian này: ' + nf(r.storeOrders) + ' đơn, ' + nf(r.storeRevenue) + 'đ',
+        '- Cùng số ngày ngay trước đó: ' + nf(r.prevOrders) + ' đơn, ' + nf(r.prevRevenue) + 'đ' + (r.prevOrders > 0 ? ' → đơn ' + sg(pctChange(r.storeOrders, r.prevOrders)).trim() + ', doanh thu ' + sg(pctChange(r.storeRevenue, r.prevRevenue)).trim() : '')].join('\n');
+    }
+    function copyPromoReport(id) {
+      const r = (state.promoReport || []).find(x => x.promoId === id); if (!r) return;
+      const t = promoReportText(r);
+      try { navigator.clipboard.writeText(t).then(() => showToast('Đã sao chép báo cáo. Dán vào Zalo gửi cho chủ quán nhé!'), () => showToast('Không sao chép được. Hãy chụp màn hình báo cáo.')); } catch { showToast('Không sao chép được. Hãy chụp màn hình báo cáo.'); }
+    }
+    function promoCardHtml(r, admin) {
+      const sl = PROMO_SLOTS[r.slot] || PROMO_SLOTS.strip, st = state.stores.find(x => x.id === r.storeId) || {}, f = r.foodId ? state.foods.find(x => x.id === r.foodId) : null;
+      const live = promoLive(r), left = Math.max(1, Math.ceil((new Date(r.endsAt) - Date.now()) / 864e5)), ctr = r.views > 0 ? (r.clicks / r.views * 100).toFixed(1).replace('.', ',') + '%' : '';
+      const tile = (v, l, sub) => `<div class="rounded-xl bg-gray-50 border border-gray-100 p-2.5"><b class="block text-[18px] leading-tight text-gray-900">${v}</b><span class="block text-[13px] text-gray-500">${l}${sub ? ' · ' + sub : ''}</span></div>`;
+      const dO = pctChange(r.storeOrders, r.prevOrders), dR = pctChange(r.storeRevenue, r.prevRevenue);
+      return `<div class="bg-white rounded-2xl border ${live ? 'border-green-300' : 'border-gray-100'} p-3 space-y-2.5 shadow-sm text-[13px]">
+        <div class="flex items-start justify-between gap-2"><div class="min-w-0"><b class="block text-[14px] text-gray-900">${sl.icon} ${sl.name}${f ? ' · ' + escQ(f.name) : ''}</b>${admin ? `<p class="text-gray-600 font-semibold">🏪 ${escQ(st.name || 'Quán đã xóa')}</p>` : ''}<p class="text-gray-500">${dmy(r.startsAt)} đến ${dmy(r.endsAt)} · ${r.price > 0 ? 'Phí ' + money(r.price) : 'Dùng thử miễn phí'}</p></div>
+          <span class="shrink-0 px-2.5 py-1 rounded-full text-[13px] font-bold ${live ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}">${live ? '● Còn ' + left + ' ngày' : 'Đã kết thúc'}</span></div>
+        <div class="grid grid-cols-2 gap-2">${tile(nf(r.views), 'lượt xem')}${tile(nf(r.clicks), 'lượt bấm', ctr)}${tile(nf(r.orders), 'đơn từ quảng cáo')}${tile(nf(r.revenue) + 'đ', 'doanh thu')}</div>
+        ${r.views === 0 && live ? '<p class="text-gray-500">Gói mới bắt đầu. Số liệu sẽ hiện khi có khách mở app.</p>' : ''}
+        <div class="rounded-xl bg-amber-50 border border-amber-200 p-2.5 space-y-0.5"><b class="text-amber-900">Cả quán trong thời gian này</b>
+          <p class="text-gray-800">${nf(r.storeOrders)} đơn · ${nf(r.storeRevenue)}đ ${r.prevOrders > 0 ? '(đơn ' + pctTag(dO) + (dR !== null ? ', doanh thu ' + pctTag(dR) : '') + ')' : ''}</p>
+          <p class="text-gray-500">Cùng số ngày ngay trước đó: ${nf(r.prevOrders)} đơn · ${nf(r.prevRevenue)}đ</p></div>
+        ${admin && r.note ? `<p class="text-gray-500">📝 ${escQ(r.note)}</p>` : ''}
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="copyPromoReport('${r.promoId}')" class="h-10 px-3 rounded-xl border border-emerald-600 text-emerald-800 bg-white font-extrabold">📋 Sao chép báo cáo</button>
+          ${admin ? (live ? `<button onclick="extendPromo('${r.promoId}', 7)" class="h-10 px-3 rounded-xl bg-emerald-700 text-white font-extrabold">+7 ngày</button><button onclick="endPromo('${r.promoId}')" class="h-10 px-3 rounded-xl border border-gray-300 text-gray-700 font-bold">Kết thúc</button>` : `<button onclick="rerunPromo('${r.promoId}')" class="h-10 px-3 rounded-xl bg-emerald-700 text-white font-extrabold">Chạy lại</button>`) + `<button onclick="deletePromo('${r.promoId}')" class="h-10 px-2 text-rose-600 font-bold">🗑 Xóa</button>` : ''}</div></div>`;
+    }
+    function promoFormHtml() {
+      const f = promoForm(), foods = state.foods.filter(x => x.storeId === f.storeId), sug = promoSuggest(f.slot, +f.days || 7), pv = parseShortPrice(f.price);
+      return `<div id="promoFormTop" class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2.5 shadow-sm text-[13px]"><h3 class="font-extrabold text-[14px] text-gray-900">Tạo gói quảng bá mới</h3>
+        <label class="block space-y-1"><span class="font-bold">Quán</span><select class="field" onchange="pfSet('storeId', this.value)"><option value="">Chọn quán...</option>${state.stores.map(s => `<option value="${attrQ(s.id)}" ${s.id === f.storeId ? 'selected' : ''}>${escQ(s.name)}</option>`).join('')}</select></label>
+        <div class="space-y-1.5"><span class="font-bold">Vị trí</span>${Object.entries(PROMO_SLOTS).map(([k, v]) => `<button onclick="pfSet('slot', '${k}')" class="w-full text-left rounded-xl border-2 p-2.5 ${f.slot === k ? 'border-emerald-700 bg-emerald-50' : 'border-gray-200 bg-white'}"><b class="text-[14px]">${v.icon} ${v.name}</b><span class="block text-gray-500">${v.where}</span></button>`).join('')}</div>
+        ${f.slot !== 'strip' ? `<label class="block space-y-1"><span class="font-bold">Món cần quảng bá</span><select class="field" onchange="pfSet('foodId', this.value)"><option value="">${f.storeId ? 'Chọn món...' : 'Hãy chọn quán trước'}</option>${foods.map(x => `<option value="${attrQ(x.id)}" ${x.id === f.foodId ? 'selected' : ''}>${escQ(x.name)} (${priceText(x).replace(/<[^>]*>/g, '')})</option>`).join('')}</select></label>` : ''}
+        <div class="grid grid-cols-2 gap-2"><label class="block space-y-1"><span class="font-bold">Thời gian</span><select class="field" onchange="pfSet('days', this.value)">${[7, 14, 30].map(d => `<option value="${d}" ${+f.days === d ? 'selected' : ''}>${d} ngày</option>`).join('')}</select></label>
+          <label class="block space-y-1"><span class="font-bold">Số tiền thu</span><input class="field" inputmode="numeric" value="${attrQ(f.price)}" oninput="pfPrice(this)" placeholder="VD: 199" /></label></div>
+        <p class="text-gray-500"><span id="pfPricePrev">${pv > 0 ? 'Thu: ' + money(pv) : 'Bỏ trống là dùng thử miễn phí'}</span> · Giá gợi ý ${money(sug)} <button onclick="pfSuggest()" class="text-emerald-700 font-bold underline">Dùng giá này</button></p>
+        <label class="block space-y-1"><span class="font-bold">Ghi chú (chỉ Admin thấy)</span><input class="field" value="${attrQ(f.note)}" oninput="promoForm().note=this.value" placeholder="VD: đã thu tiền mặt" /></label>
+        <button onclick="createPromo()" class="w-full bg-emerald-700 text-white py-3 rounded-xl font-extrabold">Bắt đầu quảng bá ngay</button></div>`;
+    }
+    function adminPromoHtml() {
+      const rep = [...(state.promoReport || [])].sort((a, b) => promoLive(b) - promoLive(a) || new Date(b.startsAt) - new Date(a.startsAt)), live = rep.filter(promoLive), open = !!state.adminPromoOpen;
+      const toggle = `<button onclick="state.adminPromoOpen = !state.adminPromoOpen; render();" class="w-full flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm text-[14px] font-extrabold text-gray-800"><span>📣 Quảng bá trên trang chủ${live.length ? ` <span class="text-green-700">● ${live.length} đang chạy</span>` : ''}</span><span class="text-gray-400 text-[13px]">${open ? '▲' : '▼'}</span></button>`;
+      if (!open) return `<div class="space-y-2">${toggle}</div>`;
+      if (state.promoReady === false) return `<div class="space-y-2">${toggle}<div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 space-y-2 text-[13px] text-amber-900"><b>Chưa cài phần quảng bá trong Supabase.</b><p>Vào Supabase, mở SQL Editor, dán toàn bộ file <b>promo-setup.sql</b> rồi bấm Run. Xong quay lại đây bấm nút dưới.</p><button onclick="refreshPromos()" class="bg-emerald-700 text-white px-4 h-10 rounded-xl font-extrabold">Kiểm tra lại</button></div></div>`;
+      return `<div class="space-y-2.5">${toggle}
+        <p class="text-[13px] text-gray-500 px-1">Quán mua vị trí sẽ hiện nhãn "Tài trợ" trên trang chủ. Mỗi gói tự động đếm lượt xem, lượt bấm và đơn đặt để bạn gửi báo cáo cho chủ quán.</p>
+        ${promoFormHtml()}
+        ${rep.length ? rep.map(r => promoCardHtml(r, true)).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có gói nào. Hãy tạo gói dùng thử cho một quán để lấy số liệu đầu tiên.</div>'}</div>`;
+    }
+    function ownerPromoHtml(s) {
+      const rep = (state.promoReport || []).filter(r => r.storeId === s.id).sort((a, b) => promoLive(b) - promoLive(a) || new Date(b.startsAt) - new Date(a.startsAt)), live = rep.some(promoLive);
+      const card = 'bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm text-[13px]';
+      const contact = PLATFORM_ZALO ? `<div class="flex gap-2"><a href="tel:${escQ(PLATFORM_ZALO)}" class="flex-1 text-center border border-emerald-600 text-emerald-800 bg-white rounded-xl py-2.5 font-extrabold">📞 Gọi tư vấn</a><a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" class="flex-1 text-center border border-gray-300 bg-white rounded-xl py-2.5 font-extrabold">Nhắn Zalo</a></div>` : '<p class="font-bold text-emerald-800">Liên hệ quản trị ShopFood để được tư vấn gói phù hợp.</p>';
+      const pitch = `<div class="${card}"><b class="text-[14px] text-gray-900">Đưa món của bạn lên trang chủ ShopFood</b><p class="text-gray-600">Khách mở app sẽ thấy món của bạn ngay. Bạn xem được số lượt xem, lượt bấm và đơn đặt từ quảng cáo ngay trong app.</p>
+        ${Object.values(PROMO_SLOTS).map(v => `<p class="flex gap-2"><span>${v.icon}</span><span><b>${v.name}.</b> ${v.where}</span></p>`).join('')}${contact}</div>`;
+      if (state.promoReady === false || !rep.length) return pitch;
+      return `<div class="space-y-2.5">${rep.map(r => promoCardHtml(r, false)).join('')}<p class="text-[13px] text-gray-500 px-1">Đơn từ quảng cáo là đơn khách đặt tại quán trong 24 giờ sau khi bấm vào quảng cáo. Số đơn của cả quán còn chịu ảnh hưởng của ngày lễ, thời tiết và món bán chạy, nên chỉ dùng để tham khảo.</p>${live ? '' : pitch}</div>`;
+    }
+
     // ===== PHẦN TRƯNG BÀY: BÁN CHẠY TRONG TUẦN, TỰ ĐỘNG LƯỚT =====
     const FEATURE_ROTATE_MS = 2500;   // thời gian dừng ở mỗi món (mili giây). Muốn nhanh hơn thì giảm số này.
     const FEATURE_MAX = 8, FEATURE_PER_STORE = 2;
@@ -838,7 +1048,11 @@
       take(order(pool.filter(f => wk(f) > 0), wk));                  // 1) bán chạy trong 7 ngày qua
       if (picked.length < 4) take(order(pool.filter(f => all(f) > 0), all)); // 2) chưa đủ thì bổ sung món bán nhiều từ trước tới nay
       if (picked.length < 4) take(pool);                                // 3) vẫn chưa đủ thì lấy món mới đăng
-      return picked;
+      const sp = sponsoredHero(), adIds = new Set([sp.gold, sp.silver].filter(Boolean).map(f => f.id));
+      const list = picked.filter(f => !adIds.has(f.id));   // món tài trợ không xuất hiện hai lần
+      if (sp.gold) list.unshift(sp.gold);                  // vị trí vàng: thẻ số 1
+      if (sp.silver) list.splice(Math.min(2, list.length), 0, sp.silver); // vị trí bạc: thẻ số 3
+      return list.slice(0, FEATURE_MAX);
     }
     const featuredIds = () => new Set(computeFeatured().map(f => f.id));
     let featPauseUntil = 0;
@@ -868,10 +1082,10 @@
     function featCardHtml(f) {
       const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
       const wkSold = state.weekSales ? (state.weekSales[f.id] || 0) : 0, badge = wkSold > 0 ? 'Tuần này bán ' + wkSold : sold > 0 ? 'Đã bán ' + sold : 'Món mới';
-      return `<div data-feat class="snap-start shrink-0 w-[74%] max-w-[300px]"><div class="relative h-[268px] rounded-3xl overflow-hidden bg-bark-deep ring-1 ring-white/10 cursor-pointer" onclick="${go}">
+      return `<div data-feat class="snap-start shrink-0 w-[74%] max-w-[300px]"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative h-[268px] rounded-3xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
         <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
-        <span class="absolute top-3 left-3 bg-nghe text-bark text-[13px] font-bold px-3 py-1 rounded-full">${badge}</span>
+        ${f._ad ? '<span class="absolute top-3 left-3 bg-white/90 text-bark text-[13px] font-bold px-3 py-1 rounded-full">Tài trợ</span>' : `<span class="absolute top-3 left-3 bg-nghe text-bark text-[13px] font-bold px-3 py-1 rounded-full">${badge}</span>`}
         <div class="absolute left-4 right-16 bottom-4"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[21px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><p class="text-nghe font-extrabold text-[18px] mt-1">${priceText(f)}</p></div>
         <div class="absolute right-3 bottom-3 z-10">${plusHtml(f.id, true)}</div></div></div>`;
     }
@@ -887,7 +1101,7 @@
       if (!supabaseClient) return;
       let [a, b, c] = await Promise.all([
         supabaseClient.rpc('food_stats'), supabaseClient.from('store_ratings').select('*'),
-        state.user ? supabaseClient.from('reviews').select('order_id,stars').eq('user_id', state.user.id) : Promise.resolve({ data: [] })]);
+        state.user ? supabaseClient.from('reviews').select('order_id,stars').eq('user_id', state.user.id) : Promise.resolve({ data: [] }), loadPromos()]);
       if (a.error) a = await supabaseClient.rpc('food_sales'); // dự phòng nếu chưa chạy SQL mới
       state.sales = {}; state.foodStats = {};
       (a.data || []).forEach(r => { state.sales[r.food_id] = Number(r.sold) || 0; state.foodStats[r.food_id] = { orders: Number(r.orders_cnt) || 0, avg: Number(r.avg_stars) || 0, cnt: Number(r.rating_cnt) || 0 }; });
@@ -1192,7 +1406,7 @@
       const skeleton = !state.cloudLoaded && !state.foods.length ? '<div class="flex gap-3 px-4 overflow-hidden"><div class="shrink-0 w-[74%] h-[268px] rounded-3xl bg-white/10 animate-pulse"></div><div class="shrink-0 w-[74%] h-[268px] rounded-3xl bg-white/10 animate-pulse"></div></div>' : '';
       return header + `<section class="bg-gradient-to-b from-bark to-bark-deep text-white rounded-b-[28px] pb-6">
         <div class="px-4 pt-1"><h2 class="font-display text-[30px] leading-[1.08] font-bold">Hôm nay ăn gì nhỉ?</h2><p class="mt-1.5 text-[14px] leading-snug text-white/75 max-w-[30ch]">Chọn món, nhập số điện thoại và địa chỉ là xong. Không cần đăng ký.</p></div>
-        ${featured.length ? `<div class="mt-4 px-4 flex items-center justify-between gap-2"><h3 class="font-display text-[19px] font-bold text-white">${state.weekSales && featured.some(f => (state.weekSales[f.id] || 0) > 0) ? 'Bán chạy trong tuần' : 'Món được đặt nhiều'}</h3>${featured.length > 1 ? `<div class="flex items-center gap-1.5" aria-hidden="true">${featured.map((f, i) => `<span data-dot="${i}" class="h-1.5 rounded-full transition-all ${i === 0 ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'}"></span>`).join('')}</div>` : ''}</div>
+        ${featured.length ? `<div class="mt-4 px-4 flex items-center justify-between gap-2"><h3 class="font-display text-[19px] font-bold text-white">${featured.some(f => f._ad) ? 'Món nổi bật hôm nay' : state.weekSales && featured.some(f => (state.weekSales[f.id] || 0) > 0) ? 'Bán chạy trong tuần' : 'Món được đặt nhiều'}</h3>${featured.length > 1 ? `<div class="flex items-center gap-1.5" aria-hidden="true">${featured.map((f, i) => `<span data-dot="${i}" class="h-1.5 rounded-full transition-all ${i === 0 ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'}"></span>`).join('')}</div>` : ''}</div>
         <div data-scroll="feat" class="mt-3 flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 scroll-px-4">${featured.map(featCardHtml).join('')}<div class="shrink-0 w-1"></div></div>` : skeleton}
       </section>`;
     }
@@ -1488,7 +1702,7 @@
           createdAt: now, unsynced: !!supabaseClient, customerId: state.user ? state.user.id : null, consent: state.checkoutConsent,
           events: [{ status: 'PENDING_CONFIRMATION', label: 'Khách gửi đơn', at: now }]
         };
-        state.orders.unshift(o); ids.push(o.id); syncOrder(o);
+        state.orders.unshift(o); ids.push(o.id); syncOrder(o); adOrder(g.storeId, g.subtotal);
       });
       if (!state.tableCtx) { state.profile = { ...state.profile, name, phone, address: state.fulfillmentMethod === 'DELIVERY' ? address : state.profile.address };
       saveProfile(true); }
@@ -1717,13 +1931,13 @@
         const fresh = visibleFoods.filter(f => newIds.has(f.id));
         const showFresh = fresh.length >= 3 && featured.length > 0, freshIds = new Set(showFresh ? fresh.map(f => f.id) : []);
         const rest = browsing ? ranked.filter(f => !topIds.has(f.id) && !freshIds.has(f.id)) : ranked;
-        const shops = [...state.stores].sort((a, b) => (b.isOpen ? 1 : 0) - (a.isOpen ? 1 : 0));
+        const shops = orderedShops();
         const h3 = 'font-display text-[21px] leading-tight font-bold text-bark';
         const gridTitle = state.searchQuery ? 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)' : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : (featured.length ? 'Tất cả món ngon' : 'Món nổi bật');
         const skel = '<div class="bg-white rounded-2xl border border-black/5 overflow-hidden animate-pulse"><div class="h-36 bg-gray-200"></div><div class="p-3 space-y-2"><div class="h-3 bg-gray-200 rounded w-4/5"></div><div class="h-3 bg-gray-200 rounded w-2/5"></div></div></div>';
         html += `
           ${categoryBarHtml()}
-          ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1">${shops.map(st => `<button onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[72px] flex flex-col items-center gap-1.5"><span class="relative"><img src="${st.image}" loading="lazy" class="w-16 h-16 rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span></button>`).join('')}</div></section>` : ''}
+          ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1">${shops.map(st => { const ad = st.isOpen && !st.suspended ? stripPromoOf(st.id) : null; return `<button ${ad ? `data-ad="${ad.id}"` : ''} onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[72px] flex flex-col items-center gap-1.5"><span class="relative"><img src="${st.image}" loading="lazy" class="w-16 h-16 rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span>${ad ? '<span class="-mt-1 text-[13px] font-bold text-gac">Tài trợ</span>' : ''}</button>`; }).join('')}</div></section>` : ''}
           ${state.stores.length === 0 && state.cloudLoaded ? `
             <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center space-y-2">
               <p class="text-[13px] text-gray-600">Chưa có cửa hàng nào trong khu vực này.</p>
@@ -1954,7 +2168,7 @@
       document.querySelectorAll('[data-scroll]').forEach(el => { const v = sc[el.dataset.scroll]; if (v) { el.scrollTop = v[0]; el.scrollLeft = v[1]; } });
       window.scrollTo(0, wy);
       { const sp = document.querySelector('[data-scroll="s0"]'); if (sp) syncStoreBar(sp); }
-      updateBadge();
+      updateBadge(); observeAds();
       if (sig) {
         const el = app.querySelectorAll('input,textarea')[idx];
         if (el && el.tagName === sig[0] && el.type === sig[1] && el.placeholder === sig[2]) { el.focus({ preventScroll: true }); try { el.setSelectionRange(sig[3], sig[4]); } catch {} }
