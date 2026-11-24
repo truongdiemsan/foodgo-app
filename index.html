@@ -817,6 +817,20 @@
     const foodOk = f => { const st = state.stores.find(x => x.id === f.storeId); return f.inStock && st && st.isOpen ? 1 : 0; };
     const hotFoods = list => [...list].sort((a, b) => foodOk(b) - foodOk(a) || (state.sales[b.id] || 0) - (state.sales[a.id] || 0));
     let newIds = new Set();
+    // Tìm không phân biệt hoa thường và dấu tiếng Việt: gõ "huong que" vẫn ra "HƯƠNG QUẾ"
+    const foldCh = c => c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+    const fold = t => Array.from(String(t == null ? '' : t)).map(foldCh).join('');
+    function hl(text, q) {
+      const t = String(text == null ? '' : text), qq = fold(q).trim(); if (!qq) return escQ(t);
+      const chars = Array.from(t), ft = chars.map(foldCh).join(''); if (ft.length !== chars.length) return escQ(t);
+      const at = ft.indexOf(qq); if (at < 0) return escQ(t);
+      return escQ(chars.slice(0, at).join('')) + '<mark class="bg-amber-200/80 text-inherit rounded px-0.5">' + escQ(chars.slice(at, at + qq.length).join('')) + '</mark>' + escQ(chars.slice(at + qq.length).join(''));
+    }
+    function searchStoresHtml(list, q) {
+      if (!list.length) return '';
+      return `<section class="space-y-2"><div class="flex items-baseline justify-between"><h3 class="font-display text-[21px] leading-tight font-bold text-bark">Quán</h3><span class="text-[13px] text-gray-500">${list.length} quán</span></div>${list.map(st => { const r = state.ratings[st.id], on = st.isOpen;
+        return `<button onclick="state.viewStoreId='${st.id}'; render();" class="w-full text-left bg-white rounded-2xl border border-black/5 p-2.5 flex items-center gap-3"><img src="${st.image}" loading="lazy" class="w-[50px] h-[50px] rounded-[14px] object-cover shrink-0 border-2 ${on ? 'border-nghe' : 'border-gray-200 grayscale'}" /><span class="min-w-0 flex-1"><b class="block text-[15px] text-gray-900 truncate">${hl(st.name, q)}</b><span class="block text-[13px] text-gray-500 truncate">${on ? '<b class="text-green-700">● Đang mở</b>' : 'Đang nghỉ'} · ${r && r.cnt ? '⭐ ' + r.avg.toFixed(1) : 'Quán mới'}${st.address ? ' · ' + escQ(st.address) : ''}</span></span><span class="text-gray-300 text-xl shrink-0">›</span></button>`; }).join('')}</section>`;
+    }
     function foodCardHtml(f) {
       const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
       return `<div class="h-full bg-white rounded-2xl border border-black/5 lift overflow-hidden flex flex-col ${foodOk(f) ? '' : 'opacity-70'}">
@@ -1394,13 +1408,12 @@
             <div class="flex items-baseline gap-2 min-w-0"><span class="font-display text-[25px] font-bold text-nghe leading-none">ShopFood</span>${area ? `<span class="text-[13px] text-white/65 truncate">${escQ(area)}</span>` : ''}</div>
             <button onclick="openCart()" class="shrink-0 h-11 pl-4 pr-1.5 rounded-full bg-white/10 border border-white/25 text-white flex items-center gap-2 text-[14px] font-bold">Giỏ hàng <span class="bg-nghe text-bark rounded-full min-w-[30px] h-8 px-1.5 flex items-center justify-center text-[14px] font-black">${cartCount()}</span></button>
           </div>
-          <div class="relative">
-            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] text-gray-400 pointer-events-none">🔍</span>
-            <input value="${escQ(state.searchQuery)}" oninput="state.searchQuery=this.value; render();" placeholder="Hôm nay bạn muốn ăn gì?" enterkeyhint="search" autocomplete="off" class="w-full bg-white text-gray-900 pl-11 pr-28 rounded-full text-[15px] outline-none focus:ring-2 focus:ring-nghe" style="min-height:50px" />
-            <div class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center">
-              ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" aria-label="Xóa tìm kiếm" class="w-11 h-11 rounded-full text-gray-400 font-bold">✕</button>` : ''}
-              <button onclick="startVoiceRecognition()" aria-label="Tìm bằng giọng nói" class="w-11 h-11 rounded-full flex items-center justify-center text-xl ${state.isListening ? 'bg-gac text-white animate-pulse' : 'bg-nghe text-bark'}">🎙️</button>
-            </div>
+          <div class="flex items-center gap-2 bg-white rounded-xl h-10 pl-3 pr-1 text-gray-900 shadow-[0_2px_8px_rgba(0,0,0,.22)] focus-within:ring-2 focus-within:ring-nghe">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8a8178" stroke-width="2.2" stroke-linecap="round" class="shrink-0" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+            <input value="${escQ(state.searchQuery)}" oninput="state.searchQuery=this.value; render();" placeholder="Tìm món ăn hoặc tên quán" enterkeyhint="search" autocomplete="off" aria-label="Tìm món ăn hoặc tên quán" class="flex-1 min-w-0 h-full bg-transparent text-[14.5px] outline-none placeholder:text-[#8a8178]" />
+            ${state.searchQuery ? `<button onclick="state.searchQuery=''; render();" aria-label="Xóa tìm kiếm" class="shrink-0 w-8 h-8 rounded-full text-gray-400 font-bold">✕</button>` : ''}
+            <span class="w-px h-5 bg-[#e6e0d8] shrink-0"></span>
+            <button onclick="startVoiceRecognition()" aria-label="Tìm bằng giọng nói" class="shrink-0 w-8 h-8 rounded-[9px] flex items-center justify-center ${state.isListening ? 'bg-gac animate-pulse' : 'bg-nghe'}"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="${state.isListening ? '#fff' : '#4A1F16'}" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
           </div>
           ${state.isListening ? '<p class="text-[13px] text-nghe font-bold text-center">Đang nghe... hãy nói tên món bạn muốn (bấm micro để dừng)</p>' : ''}
         </div></header>`;
@@ -1907,10 +1920,11 @@
         const store = storeById[f.storeId];
         const inArea = !!store;
         const catMatch = state.selectedCategory === 'Tất cả' || f.category === state.selectedCategory;
-        const searchMatch = !query || `${f.name} ${f.description} ${store?.name || ''}`.toLowerCase().includes(query);
+        const searchMatch = !query || fold(`${f.name} ${f.description} ${store?.name || ''}`).includes(fold(query));
         return inArea && catMatch && searchMatch;
       });
 
+      const matchedStores = query && state.selectedCategory === 'Tất cả' ? state.stores.filter(s => fold(`${s.name} ${s.address || ''} ${s.category || ''}`).includes(fold(query))).sort((a, b) => (b.isOpen ? 1 : 0) - (a.isOpen ? 1 : 0)) : [];
       const myStore = state.stores.find(s => s.id === state.profile.myStoreId);
       const myStoreFoods = state.foods.filter(f => f.storeId === state.profile.myStoreId);
       const myStoreOrders = state.orders.filter(o => o.storeId === state.profile.myStoreId);
@@ -1935,10 +1949,11 @@
         const rest = browsing ? ranked.filter(f => !topIds.has(f.id) && !freshIds.has(f.id)) : ranked;
         const shops = orderedShops();
         const h3 = 'font-display text-[21px] leading-tight font-bold text-bark';
-        const gridTitle = state.searchQuery ? 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)' : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : (featured.length ? 'Tất cả món ngon' : 'Món nổi bật');
+        const gridTitle = state.searchQuery ? (matchedStores.length ? 'Món (' + visibleFoods.length + ')' : 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)') : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : (featured.length ? 'Tất cả món ngon' : 'Món nổi bật');
         const skel = '<div class="bg-white rounded-2xl border border-black/5 overflow-hidden animate-pulse"><div class="h-36 bg-gray-200"></div><div class="p-3 space-y-2"><div class="h-3 bg-gray-200 rounded w-4/5"></div><div class="h-3 bg-gray-200 rounded w-2/5"></div></div></div>';
         html += `
           ${categoryBarHtml()}
+          ${searchStoresHtml(matchedStores, state.searchQuery)}
           ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1">${shops.map(st => { const ad = st.isOpen && !st.suspended ? stripPromoOf(st.id) : null; return `<button ${ad ? `data-ad="${ad.id}"` : ''} onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[72px] flex flex-col items-center gap-1.5"><span class="relative"><img src="${st.image}" loading="lazy" class="w-16 h-16 rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span>${ad ? '<span class="-mt-1 text-[13px] font-bold text-gac">Tài trợ</span>' : ''}</button>`; }).join('')}</div></section>` : ''}
           ${state.stores.length === 0 && state.cloudLoaded ? `
             <div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center space-y-2">
@@ -1947,9 +1962,9 @@
             </div>` : ''}
           ${showFresh ? `<section class="space-y-2.5"><div class="flex items-end justify-between gap-2"><h3 class="${h3}">Món mới lên kệ</h3><span class="text-[13px] text-gray-500">Thử ngay hôm nay</span></div><div data-scroll="fresh" class="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 pb-1.5">${fresh.map(foodMiniCardHtml).join('')}</div></section>` : ''}
           <section class="space-y-2.5">
-            ${rest.length || !featured.length ? `<h3 class="${h3}">${gridTitle}</h3>` : ''}
+            ${(rest.length || !featured.length) && !(matchedStores.length && !rest.length) ? `<h3 class="${h3}">${gridTitle}</h3>` : ''}
             <div class="grid grid-cols-2 gap-3">
-              ${rest.length ? rest.map(foodCardHtml).join('') : (featured.length ? '' : (!state.cloudLoaded && !state.foods.length ? skel + skel + skel + skel : `
+              ${rest.length ? rest.map(foodCardHtml).join('') : (featured.length || (matchedStores.length && state.searchQuery) ? '' : (!state.cloudLoaded && !state.foods.length ? skel + skel + skel + skel : `
                 <div class="col-span-2 bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-500">
                   ${state.searchQuery ? 'Chưa thấy món nào khớp với "' + escQ(state.searchQuery) + '". Bạn thử từ khác hoặc <button onclick="state.searchQuery=\'\'; render();" class="text-gac font-bold underline">xem tất cả món</button> nhé.' : 'Chưa có món ăn nào. Hãy chờ chủ quán đăng món nhé!'}
                 </div>`))}
