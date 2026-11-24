@@ -566,10 +566,10 @@
           <label class="block space-y-1"><span class="font-bold">Cách giao và phí giao (bạn tự thỏa thuận với khách)</span><textarea oninput="state.shipEdit=this.value;" class="field" placeholder="VD: Giao trong thôn 10k, ngoài thôn 20k. Khách đến lấy miễn phí.">${state.shipEdit ?? s.shipInfo ?? ''}</textarea></label>
           <label class="block space-y-1"><span class="font-bold">Cách nhận tiền</span><textarea oninput="state.payEdit=this.value;" class="field" placeholder="VD: Tiền mặt khi nhận. Hoặc chuyển khoản STK ...">${state.payEdit ?? s.payInfo ?? ''}</textarea></label>
           <button onclick="saveStoreInfo()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">Lưu thông tin</button></div>`)}
-        ${sec('fee', '💳', 'Phí dùng app', dues.length ? ' <span class="text-rose-600">●</span>' : '', () => `<div class="${card}">${feeProgressHtml(n)}
+        ${sec('fee', '💳', 'Bản dùng thử miễn phí', dues.length ? ' <span class="text-rose-600">●</span>' : '', () => `<div class="${card}">${feeProgressHtml(n)}
           ${dues.map(d => `<p class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${d.n} đơn, phí ${money(d.fee)}, hạn đóng ${d.due.toLocaleDateString('vi-VN')}</p>`).join('')}
           ${dues.length ? `<p class="text-gray-500">Chuyển khoản: ${PLATFORM_PAY}</p>` : ''}
-          <p class="text-[13px] text-gray-400">0–30 đơn/tháng: miễn phí · 31–100: 99.000đ · 101–200: 199.000đ · 201–400: 349.000đ · trên 400: 499.000đ</p></div>`)}
+          <p class="text-[13px] text-gray-400">Dùng thử: 0–30 đơn/tháng miễn phí. Gói trả phí: 31–100: 99.000đ · 101–200: 199.000đ · 201–400: 349.000đ · trên 400: 499.000đ</p></div>`)}
         ${sec('crm', '👥', 'Khách hàng của quán', '', () => `<div class="${card}">${crmHtml()}</div>`)}
       </section>`;
     }
@@ -1153,12 +1153,12 @@
       const cap = [30, 100, 200, 400].find(x => n <= x), fee = feeFor(n);
       if (!cap) return `<p class="text-[15px]">Phí tháng này: <b class="text-amber-700">${money(fee)}</b> <span class="text-gray-500">(${n} đơn, mức cao nhất)</span></p>`;
       const free = cap === 30, pct = Math.min(100, Math.round(n / cap * 100)), left = cap - n, nextFee = feeFor(cap + 1);
-      return `<p class="text-[15px]">Phí tháng này: <b class="${fee ? 'text-amber-700' : 'text-emerald-700'}">${fee ? money(fee) : 'Miễn phí'}</b></p>
+      return `<p class="text-[15px]">${fee ? 'Phí tháng này' : 'Gói hiện tại'}: <b class="${fee ? 'text-amber-700' : 'text-emerald-700'}">${fee ? money(fee) : 'Bản dùng thử miễn phí'}</b></p>
         <div class="space-y-1">
-          <div class="flex justify-between font-bold"><span>${n}/${cap} đơn ${free ? 'miễn phí' : 'trong mức này'}</span><span>${pct}%</span></div>
+          <div class="flex justify-between font-bold"><span>${n}/${cap} đơn ${free ? 'dùng thử miễn phí' : 'trong mức này'}</span><span>${pct}%</span></div>
           <div class="h-3 rounded-full bg-gray-200 overflow-hidden"><div class="h-full rounded-full ${free ? 'bg-emerald-600' : 'bg-amber-500'}" style="width:${pct}%"></div></div>
         </div>
-        <p class="text-gray-500">${left > 0 ? `Còn ${left} đơn nữa ${free ? 'là hết miễn phí' : 'là sang mức phí kế'}.` : (free ? 'Bạn đã dùng đủ đơn miễn phí.' : 'Bạn đã đủ đơn của mức này.')} Có thêm đơn thì phí cả tháng là ${money(nextFee)}.</p>`;
+        <p class="text-gray-500">${left > 0 ? `Còn ${left} đơn nữa ${free ? 'là hết bản dùng thử miễn phí' : 'là sang mức phí kế'}.` : (free ? 'Bạn đã dùng hết đơn của bản dùng thử miễn phí.' : 'Bạn đã đủ đơn của mức này.')} Có thêm đơn thì nâng lên gói trả phí: ${money(nextFee)}/tháng.</p>`;
     }
 
     // ===== DANH MỤC MÓN =====
