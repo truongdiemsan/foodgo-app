@@ -387,7 +387,7 @@
     // ===== PHÍ THÁNG · BỘ ĐẾM ĐƠN · QUẢN TRỊ · BÁO ĐƠN MỚI =====
     const DUE_DAY = 10, GRACE = 3; // hạn đóng: ngày 10 tháng sau; ẩn quán nếu trễ quá 3 ngày
     const PLATFORM_PAY = 'STK: (điền số tài khoản của bạn) - Chủ TK: (tên)'; // hiện cho quán khi cần đóng phí
-    const PLATFORM_ZALO = '';   // số điện thoại/Zalo của chủ app, VD '0912345678'. Hiện nút Gọi và Zalo cho chủ quán muốn mua quảng bá. Để trống thì chỉ hiện lời nhắn liên hệ.
+    const PLATFORM_ZALO = '0905978747';   // số điện thoại/Zalo của chủ app, VD '0912345678'. Hiện nút Gọi và Zalo cho chủ quán muốn mua quảng bá. Để trống thì chỉ hiện lời nhắn liên hệ.
     const COUNTED = ['CONFIRMED', 'DELIVERING', 'COMPLETED']; // chỉ tính đơn quán đã xác nhận
     const feeFor = n => n <= 30 ? 0 : n <= 100 ? 99000 : n <= 200 ? 199000 : n <= 400 ? 349000 : 499000;
     const ymOf = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
@@ -1063,7 +1063,7 @@
     }
     document.addEventListener('click', e => { const el = e.target && e.target.closest && e.target.closest('[data-ad]'); if (el) adClicked(el.dataset.ad); }, true);
     let adIO = null, adTimers = {};
-    const adCanCount = () => !document.hidden && state.activeTab === 'home' && !state.viewStoreId && !state.showCart && !state.showCheckout && !state.sizePick && !state.optEdit && !state.showAuth;
+    const adCanCount = () => !document.hidden && (state.activeTab === 'home' || state.activeTab === 'orders') && !state.viewStoreId && !state.showCart && !state.showCheckout && !state.sizePick && !state.optEdit && !state.showAuth;
     function observeAds() {   // một lượt xem = thẻ quảng cáo hiện rõ trên màn hình ít nhất 1 giây
       if (adIO) adIO.disconnect(); Object.values(adTimers).forEach(clearTimeout); adTimers = {};
       if (!supabaseClient || !window.IntersectionObserver) return;
@@ -1405,6 +1405,37 @@
         <div class="text-right shrink-0"><p class="text-[13px] font-extrabold text-emerald-700">${money(o.total)}</p>
           <p class="text-[13px] font-bold ${ok ? 'text-emerald-700' : 'text-rose-600'}">${ok ? '✓ Xong' : '✕ Đã hủy'}${ok && !state.myReviews[o.id] ? ' · <span class="text-amber-600">⭐ Chấm sao</span>' : ''} ›</p></div></div>`;
     }
+    // ===== Tab Đơn hàng: các khối tiện ích dưới danh sách đơn =====
+    function loginBenefitHtml() {
+      if (hasAccount()) return `<p class="text-[13px] font-bold text-emerald-700">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</p>`;
+      return `<div class="rounded-2xl bg-bark text-white p-3.5 space-y-2.5 shadow-sm"><div><b class="block text-[15px] text-nghe">Đăng nhập để giữ đơn và nhận ưu đãi</b><span class="text-[13px] text-white/80">Chỉ mất vài giây, không cần cài thêm gì.</span></div>
+        <div class="grid grid-cols-2 gap-1.5 text-[13px]"><span class="bg-white/10 rounded-lg px-2 py-1.5">⭐ Tích điểm, lên hạng</span><span class="bg-white/10 rounded-lg px-2 py-1.5">🔁 Xem và đặt lại đơn cũ</span><span class="bg-white/10 rounded-lg px-2 py-1.5">👥 Giữ đơn nhóm lâu dài</span><span class="bg-white/10 rounded-lg px-2 py-1.5">🎁 Nhận ưu đãi từ quán</span></div>
+        <button onclick="state.showAuth=true; render();" class="w-full bg-nghe text-bark rounded-xl py-3 text-[14px] font-extrabold">Đăng nhập / Đăng ký</button></div>`;
+    }
+    function recentDishes() {   // món khách từng đặt trên máy này (mới nhất trước), chỉ lấy món còn bán
+      const seen = new Set(), out = [];
+      state.orders.filter(o => o.status !== 'CANCELLED' && (!o.customerId || (state.user && o.customerId === state.user.id))).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .forEach(o => (o.items || []).forEach(i => { const f = state.foods.find(x => x.id === i.foodId); if (f && foodOk(f) && !seen.has(f.id) && out.length < 8 && !(state.stores.find(s => s.id === f.storeId) || {}).suspended) { seen.add(f.id); out.push(f); } }));
+      return out;
+    }
+    function ordersExtrasHtml() {
+      if (!state.stores.length) return '';
+      const row = list => `<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">${list.join('')}</div>`, h = (t, sub) => `<div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[15px]">${t}</h3>${sub ? `<span class="text-[13px] text-gray-400">${sub}</span>` : ''}</div>`;
+      const recent = recentDishes(), pool = hotFoods(state.foods.filter(f => foodOk(f) && !(state.stores.find(x => x.id === f.storeId) || {}).suspended)).slice(0, 8);
+      const first = recent.length ? h('🔁 Món bạn hay đặt', 'bấm + để đặt lại') + row(recent.map(foodMiniCardHtml)) : pool.length ? h('🔥 Món bán chạy hôm nay', 'đặt ngay') + row(pool.map(foodMiniCardHtml)) : '';
+      const shown = new Set((recent.length ? recent : pool).map(f => f.id)), sp = sponsoredFoods().filter(f => !shown.has(f.id)).slice(0, 4);   // không hiện một món hai lần
+      const ads = sp.length ? h('✨ Gợi ý hôm nay', 'Tài trợ') + row(sp.map(f => `<div data-ad="${f._ad}" class="shrink-0">${foodMiniCardHtml(f)}</div>`)) : '';
+      const invite = `<div class="rounded-2xl p-3.5 space-y-2.5 text-white shadow-sm" style="background:linear-gradient(135deg,#b3261e,#e05a2b)"><div class="flex gap-3 items-start"><span class="text-3xl leading-none">🎁</span><div><b class="block text-[15px]">Mời bạn bè cùng đặt món</b><span class="text-[13px] text-white/90">Gửi ShopFood cho người quen ở Trà Bồng. Bạn bè có thêm chỗ đặt món ngon, các quán có thêm khách.</span></div></div>
+        <div class="flex gap-2"><button onclick="shareApp()" class="flex-1 bg-white text-[#b3261e] rounded-xl py-2.5 text-[14px] font-extrabold">📤 Chia sẻ ngay</button><button onclick="copyAppLink()" class="px-4 bg-white/20 rounded-xl text-[14px] font-bold">🔗 Chép link</button></div></div>`;
+      return first + ads + invite;
+    }
+    const appLink = () => location.href.split('#')[0].split('?')[0];
+    async function shareApp() {
+      const url = appLink(), text = 'ShopFood Trà Bồng: đặt món ngon quanh bạn, giao tận nơi. Vào xem nhé!';
+      if (navigator.share) { try { await navigator.share({ title: 'ShopFood', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+      copyAppLink();
+    }
+    function copyAppLink() { const url = appLink(); try { navigator.clipboard.writeText(url).then(() => showToast('Đã sao chép link ShopFood. Dán gửi cho bạn bè nhé!'), () => showToast(url)); } catch { showToast(url); } }
     function ordersListHtml() {
       const mine = state.orders.filter(o => state.user && o.customerId === state.user.id);
       if (!mine.length) return `<div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-2"><p class="text-[13px] text-gray-500">Bạn chưa có đơn hàng nào.</p><button onclick="setTab('home')" class="bg-emerald-700 text-white px-4 rounded-xl text-[13px] font-bold">Khám phá thực đơn ngay</button></div>`;
@@ -1876,6 +1907,14 @@
     function installBannerHtml() {
       if (isStandalone() || state.installDismissed) return '';
       return `<div class="flex items-center gap-2 rounded-2xl bg-white border border-orange-200 shadow-sm pl-3 pr-1 py-1.5"><span class="text-2xl">📲</span><p class="flex-1 text-[13px] font-bold text-gray-800 leading-tight">Thêm ShopFood ra màn hình chính để mở nhanh</p><button onclick="installApp()" class="bg-emerald-700 text-white px-3 rounded-full text-[13px] font-extrabold shrink-0">Thêm</button><button onclick="dismissInstall()" class="text-gray-400 font-bold px-1" aria-label="Để sau">✕</button></div>`;
+    }
+    function supportCardHtml() {
+      if (!PLATFORM_ZALO) return '';
+      const p = PLATFORM_ZALO, shown = p.replace(/^(\d{4})(\d{3})(\d+)$/, '$1 $2 $3');
+      return `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3.5 space-y-2.5">
+        <div><b class="block text-[15px] text-emerald-900">💬 Cần hỗ trợ? Liên hệ chủ ShopFood</b><span class="text-[13px] text-gray-600">Hỏi cách dùng, báo lỗi, đăng ký gói quảng bá hoặc nâng cấp tài khoản.</span></div>
+        <p class="text-[14px] font-extrabold text-bark">📞 Điện thoại / Zalo: ${escQ(shown)}</p>
+        <div class="flex gap-2"><a href="tel:${escQ(p)}" class="flex-1 text-center bg-emerald-700 text-white rounded-xl py-3 text-[14px] font-extrabold">📞 Gọi ngay</a><a href="https://zalo.me/${escQ(normPhone(p))}" target="_blank" rel="noopener" class="flex-1 text-center bg-white border border-emerald-700 text-emerald-800 rounded-xl py-3 text-[14px] font-extrabold">💬 Nhắn Zalo</a></div></div>`;
     }
     function installCardHtml() {
       if (isStandalone()) return '<p class="text-[13px] text-gray-400 text-center">✓ Bạn đang dùng ShopFood từ màn hình chính.</p>';
@@ -2428,9 +2467,8 @@
         html += `
           <div class="space-y-3">
             <h2 class="font-extrabold text-base">Đơn hàng của tôi</h2>
-            ${groupEntryHtml()}
-            ${state.user ? `<p class="text-[13px] font-bold text-emerald-700">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</p>` : '<button onclick="state.showAuth=true; render();" class="bg-amber-400 text-emerald-950 px-3 py-2 rounded-xl text-[13px] font-extrabold">Đăng nhập để xem đơn của bạn</button>'}
-            ${state.tableCtx ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[15px] text-emerald-900">🍽️ Bạn đang ở Bàn ${state.tableCtx.table}</b><button onclick="state.viewStoreId='${state.tableCtx.storeId}'; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại bàn</button></div>` : state.lockedStoreId ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[14px] text-emerald-900">🏪 Bạn đang đặt tại quán</b><button onclick="state.viewStoreId=state.lockedStoreId; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại quán</button></div>` : ''}${ordersListHtml()}
+            ${loginBenefitHtml()}
+            ${state.tableCtx ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[15px] text-emerald-900">🍽️ Bạn đang ở Bàn ${state.tableCtx.table}</b><button onclick="state.viewStoreId='${state.tableCtx.storeId}'; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại bàn</button></div>` : state.lockedStoreId ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[14px] text-emerald-900">🏪 Bạn đang đặt tại quán</b><button onclick="state.viewStoreId=state.lockedStoreId; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại quán</button></div>` : ''}${ordersListHtml()}${ordersExtrasHtml()}${groupEntryHtml()}
           </div>
         `;
       }
@@ -2468,6 +2506,7 @@
             ${state.user && state.profile.name && state.profile.phone ? '<button onclick="cancelAccEdit()" class="w-full border py-3 rounded-xl text-[13px] font-bold text-gray-600">Hủy</button>' : ''}` : accViewHtml()}
             ${hasAccount() ? `<div class="bg-emerald-50 rounded-xl p-3 text-[13px]"><b class="text-emerald-800">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</b><p class="text-gray-500 mt-1">1 điểm cho mỗi 1.000đ đơn hoàn tất. Bạc từ 100 điểm, Vàng từ 300.</p></div><button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border py-3 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button>` : '<button onclick="state.showAuth=true; render();" class="w-full bg-amber-400 text-emerald-950 py-3 rounded-xl text-[13px] font-extrabold">Đăng nhập / Tạo tài khoản</button>'}
             ${installCardHtml()}
+            ${supportCardHtml()}
           </div>
         `;
       }
