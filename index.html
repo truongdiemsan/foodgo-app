@@ -1183,6 +1183,16 @@
     // ===== DANH MỤC MÓN =====
     const CATEGORIES = ['Món ăn', 'Đồ uống', 'Ăn vặt', 'Đặc sản'];
     const catOptions = cur => (CATEGORIES.includes(cur) ? CATEGORIES : [cur, ...CATEGORIES]).map(c => `<option ${c === cur ? 'selected' : ''}>${c}</option>`).join('');
+    // "Tất cả món ngon": xếp theo nhóm Món ăn → Đồ uống → Ăn vặt → Đặc sản (nhóm lạ nằm cuối). Trong mỗi nhóm món bán chạy lên trước.
+    const CAT_ICON = { 'Món ăn': '🍲', 'Đồ uống': '🥤', 'Ăn vặt': '🍢', 'Đặc sản': '🎁' };
+    function catGroupsHtml(list) {
+      const names = [...CATEGORIES, ...[...new Set(list.map(f => f.category))].filter(c => !CATEGORIES.includes(c))];
+      return names.map(c => ({ c, items: list.filter(f => f.category === c) })).filter(g => g.items.length).map((g, i) =>
+        `<div data-cat="${escQ(g.c)}" class="${i ? 'pt-3' : ''} space-y-2.5">
+          <div class="flex items-center gap-2"><span class="text-[17px] font-extrabold text-bark">${CAT_ICON[g.c] || '🍽️'} ${escQ(g.c || 'Khác')}</span><span class="text-[13px] text-gray-400">${g.items.length} món</span><span class="flex-1 h-px bg-bark/15"></span></div>
+          <div class="grid grid-cols-2 gap-3">${g.items.map(foodCardHtml).join('')}</div>
+        </div>`).join('');
+    }
     function categoryBarHtml() {
       return `<div data-scroll="cats" class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">${['Tất cả', ...CATEGORIES].map(c => `<button onclick="state.selectedCategory='${c}'; render();" class="shrink-0 px-5 rounded-full border text-[14px] font-bold ${state.selectedCategory === c ? 'bg-bark border-bark text-nghe' : 'bg-white border-gray-200 text-gray-700'}">${c}</button>`).join('')}</div>`;
     }
@@ -2158,12 +2168,12 @@
           ${showFresh ? `<section class="space-y-2.5"><div class="flex items-end justify-between gap-2"><h3 class="${h3}">Món mới</h3><span class="text-[13px] text-gray-500">Thử ngay hôm nay</span></div><div data-scroll="fresh" class="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 pb-1.5">${fresh.map(foodMiniCardHtml).join('')}</div></section>` : ''}
           <section class="space-y-2.5">
             ${(rest.length || !featured.length) && !(matchedStores.length && !rest.length) ? `<h3 class="${h3}">${gridTitle}</h3>` : ''}
-            <div class="grid grid-cols-2 gap-3">
+            ${browsing && rest.length ? catGroupsHtml(rest) : `<div class="grid grid-cols-2 gap-3">
               ${rest.length ? rest.map(foodCardHtml).join('') : (featured.length || (matchedStores.length && state.searchQuery) ? '' : (!state.cloudLoaded && !state.foods.length ? skel + skel + skel + skel : `
                 <div class="col-span-2 bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-500">
                   ${state.searchQuery ? 'Chưa thấy món nào khớp với "' + escQ(state.searchQuery) + '". Bạn thử từ khác hoặc <button onclick="state.searchQuery=\'\'; render();" class="text-gac font-bold underline">xem tất cả món</button> nhé.' : 'Chưa có món ăn nào. Hãy chờ chủ quán đăng món nhé!'}
                 </div>`))}
-            </div>
+            </div>`}
           </section>
         `;
       }
