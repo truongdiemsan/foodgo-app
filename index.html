@@ -1227,6 +1227,22 @@
     }
     setInterval(featTick, FEATURE_ROTATE_MS);
     ['touchstart', 'pointerdown', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('[data-scroll="feat"]')) featPauseUntil = Date.now() + 8000; }, { capture: true, passive: true }));
+    // Dải "Quán quanh bạn": mỗi lần thấy 4 quán, tự trôi chậm từ trái sang phải. Chạm vào thì dừng 8 giây. Hết dải thì quay về đầu.
+    let shopPos = 0, shopPause = 0, shopHold = 0;
+    function shopAuto() {
+      requestAnimationFrame(shopAuto);
+      if (document.hidden || Date.now() < shopPause || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+      if (state.activeTab !== 'home' || state.viewStoreId || state.showCart || state.showCheckout || state.sizePick || state.optEdit || state.showAuth) return;
+      const el = document.querySelector('[data-scroll="stores"]'); if (!el) return;
+      const max = el.scrollWidth - el.clientWidth; if (max < 8) return;
+      const r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
+      const now = Date.now(); if (now < shopHold) return;
+      if (Math.abs(el.scrollLeft - shopPos) > 2) shopPos = el.scrollLeft;   // người dùng tự kéo: chạy tiếp từ chỗ đó
+      if (el.scrollLeft >= max - 1) { shopHold = now + 1800; shopPos = 0; el.scrollTo({ left: 0, behavior: 'smooth' }); shopHold = now + 2800; return; }
+      shopPos = Math.min(max, shopPos + 0.4); el.scrollLeft = Math.round(shopPos);
+    }
+    requestAnimationFrame(shopAuto);
+    ['touchstart', 'pointerdown', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('[data-scroll="stores"]')) shopPause = Date.now() + 8000; }, { capture: true, passive: true }));
     function syncStoreBar(el) {
       const on = el.scrollTop > 90, bg = document.getElementById('storeBarBg'), nm = document.getElementById('storeBarName');
       state.storeScrolled = on; state.storeScrolledId = state.viewStoreId;
@@ -2384,9 +2400,9 @@
         const gridTitle = state.searchQuery ? (matchedStores.length ? 'Món (' + visibleFoods.length + ')' : 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)') : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : (featured.length ? 'Tất cả món ngon' : 'Món nổi bật');
         const skel = '<div class="bg-white rounded-2xl border border-black/5 overflow-hidden animate-pulse"><div class="h-36 bg-gray-200"></div><div class="p-3 space-y-2"><div class="h-3 bg-gray-200 rounded w-4/5"></div><div class="h-3 bg-gray-200 rounded w-2/5"></div></div></div>';
         html += `
-          ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1 pt-2 pb-1">${(() => { const intro = adIntro(); let n = 0; return shops.map(st => { const ad = st.isOpen && !st.suspended ? storeRankOf(st.id) : null, rk = ad ? slotInfo(ad.slot).rank : 0, k = n++;
-            if (ad) return `<button data-ad="${ad.id}" onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[84px] flex flex-col items-center gap-1 ${intro ? 'ad-in' : ''}" style="animation-delay:${k * 130}ms"><span class="ad-wave relative block w-[76px] h-[76px]" style="animation-delay:${k * 0.7}s"><span class="ad-spin"></span><img src="${st.image}" loading="lazy" style="position:absolute;inset:3.5px;width:69px;height:69px" class="rounded-full object-cover border-2 border-white" /><span class="absolute bottom-0.5 right-0.5 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span></span><span class="text-[13px] font-extrabold text-bark line-clamp-1 w-full text-center">${escQ(st.name)}</span><span class="-mt-1 text-[13px] font-bold text-gac">Tài trợ</span></button>`;
-            return `<button onclick="state.viewStoreId='${st.id}'; render();" class="shrink-0 w-[72px] flex flex-col items-center gap-1.5 self-start"><span class="relative"><img src="${st.image}" loading="lazy" class="w-16 h-16 rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-0 right-0 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span></button>`; }).join(''); })()}</div></section>` : ''}
+          ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1 pt-2 pb-1">${(() => { const intro = adIntro(); let n = 0; return shops.map(st => { const ad = st.isOpen && !st.suspended ? storeRankOf(st.id) : null, k = n++, box = 'flex:0 0 calc((100% - 42px) / 4);min-width:0';
+            if (ad) return `<button data-ad="${ad.id}" onclick="state.viewStoreId='${st.id}'; render();" class="flex flex-col items-center gap-1 ${intro ? 'ad-in' : ''}" style="${box};animation-delay:${k * 130}ms"><span class="ad-wave relative block w-full" style="aspect-ratio:1/1;animation-delay:${k * 0.7}s"><span class="ad-spin"></span><img src="${st.image}" loading="lazy" style="position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px)" class="rounded-full object-cover border-2 border-white" /><span class="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span></span><span class="text-[13px] font-extrabold text-bark line-clamp-1 w-full text-center">${escQ(st.name)}</span><span class="-mt-1 text-[13px] font-bold text-gac">Tài trợ</span></button>`;
+            return `<button onclick="state.viewStoreId='${st.id}'; render();" class="flex flex-col items-center gap-1.5 self-start" style="${box}"><span class="relative block w-full" style="aspect-ratio:1/1"><img src="${st.image}" loading="lazy" class="w-full h-full rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span></button>`; }).join(''); })()}</div></section>` : ''}
           ${categoryBarHtml()}
           ${searchStoresHtml(matchedStores, state.searchQuery)}
           ${state.stores.length === 0 && state.cloudLoaded ? `
