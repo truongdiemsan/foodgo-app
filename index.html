@@ -205,7 +205,7 @@
         if (storesRes.data) {
           state.stores = storesRes.data.map(s => ({
             id: s.id, name: s.name, category: s.category, address: s.address,
-            areaId: s.area_id, image: s.image, isOpen: s.is_open, phone: s.phone, ownerId: s.owner_id, shipInfo: s.ship_info, payInfo: s.pay_info, suspended: s.suspended, cover: s.cover_image, slogan: s.slogan, about: s.about, openHours: s.open_hours
+            areaId: s.area_id, image: s.image, isOpen: s.is_open, phone: s.phone, ownerId: s.owner_id, shipInfo: s.ship_info, payInfo: s.pay_info, suspended: s.suspended, cover: s.cover_image, slogan: s.slogan, about: s.about, openHours: s.open_hours, bankCode: s.bank_code || '', bankNo: s.bank_no || '', bankHolder: s.bank_holder || ''
           }));
         }
         if (foodsRes.data) {
@@ -232,7 +232,7 @@
         detectNewOrders();
         saveState();
         render();
-        loadPromoReport();
+        loadPromoReport(); loadDeposits();
       } catch (err) {
         console.error('Lỗi đồng bộ Cloud:', err);
         state.cloudLoaded = true; render();
@@ -397,11 +397,21 @@
       const was = state.isAdmin; state.isAdmin = !!(a.data && a.data.length);
       if (was !== state.isAdmin) loadCloudData(); else render();
     }
+    const bankEdit = s => state.bankEdit && state.bankEdit.id === s.id ? state.bankEdit : { id: s.id, code: s.bankCode || '', no: s.bankNo || '', holder: s.bankHolder || '' };
+    function setBank(k, v) { const s = state.stores.find(x => x.id === state.profile.myStoreId); if (!s) return; state.bankEdit = { ...bankEdit(s) }; state.bankEdit[k] = v; }
     function saveStoreInfo() {
       const s = state.stores.find(x => x.id === state.profile.myStoreId); if (!s) return;
       s.shipInfo = (state.shipEdit ?? s.shipInfo ?? '').trim(); s.payInfo = (state.payEdit ?? s.payInfo ?? '').trim();
+      const upd = { ship_info: s.shipInfo, pay_info: s.payInfo };
+      if (state.bankEdit && state.bankEdit.id === s.id) {
+        const b = state.bankEdit, no = String(b.no || '').replace(/\s/g, ''), holder = String(b.holder || '').replace(/[<>"'`\\]/g, '').trim();
+        if (b.code || no || holder) {
+          if (!b.code || !/^\d{6,20}$/.test(no) || !holder) return showToast('Tài khoản ngân hàng chưa đủ: chọn ngân hàng, nhập số tài khoản (6–20 chữ số) và tên chủ tài khoản.');
+        }
+        s.bankCode = b.code; s.bankNo = no; s.bankHolder = holder; Object.assign(upd, { bank_code: b.code, bank_no: no, bank_holder: holder }); state.bankEdit = null;
+      }
       saveState(); showToast('Đã lưu thông tin giao hàng và nhận tiền.');
-      if (supabaseClient) supabaseClient.from('stores').update({ ship_info: s.shipInfo, pay_info: s.payInfo }).eq('id', s.id).then(({ error }) => { if (error) showToast('Không lưu được lên máy chủ.'); });
+      if (supabaseClient) supabaseClient.from('stores').update(upd).eq('id', s.id).then(({ error }) => { if (error) showToast(/bank_/.test(error.message) ? 'Chưa lưu được tài khoản ngân hàng: chủ app cần chạy file group-deposit-setup.sql.' : 'Không lưu được lên máy chủ.'); });
     }
     function setSuspended(id, v) {
       const s = state.stores.find(x => x.id === id); if (!s) return;
@@ -526,6 +536,33 @@
     }
     // ===== GIAO DIỆN CHỦ QUÁN: đơn hàng lên đầu · thực đơn gọn · cài đặt thu gọn =====
     const orderTime = o => { const d = new Date(o.createdAt), t = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === new Date().toDateString() ? t : t + ' ' + d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }); };
+    // Tiền cọc 30% của đơn nhóm gửi tới quán: chủ quán thấy trên đơn và bấm xác nhận khi đã nhận tiền
+    state.deposits = [];
+    async function loadDeposits() {
+      if (!supabaseClient || !state.user || !(ownStoreId() || state.isAdmin)) return;
+      try {
+        const r = await supabaseClient.rpc('my_deposits'); if (r.error || !Array.isArray(r.data)) return;
+        const next = r.data.map(d => ({ orderId: d.order_id, storeId: d.store_id, groupTitle: clean(d.group_title || ''), total: Number(d.total) || 0, amount: Number(d.amount) || 0, paid: d.status === 'paid' }));
+        if (JSON.stringify(next) !== JSON.stringify(state.deposits)) {
+          const fresh = next.filter(d => !d.paid && !state.deposits.some(x => x.orderId === d.orderId));
+          state.deposits = next; render();
+          if (fresh.length && state.deposits.length) showToast('💰 Đơn nhóm mới: khách đặt cọc ' + fresh.map(d => money(d.amount)).join(', ') + '. Nhận tiền xong hãy bấm xác nhận.');
+        }
+      } catch {}
+    }
+    setInterval(() => { if (!document.hidden) loadDeposits(); }, 8000);
+    async function confirmDeposit(orderId, paid) {
+      const d = state.deposits.find(x => x.orderId === orderId); if (!d) return;
+      if (paid && !confirm('Xác nhận bạn ĐÃ NHẬN ' + money(d.amount) + ' tiền cọc của đơn ' + orderId + '?')) return;
+      const r = await supabaseClient.rpc('deposit_confirm', { p_order: orderId, p_paid: paid });
+      if (r.error) return showToast(r.error.message);
+      d.paid = paid; render(); showToast(paid ? 'Đã xác nhận nhận cọc. Khách có thể hoàn thành đơn nhóm.' : 'Đã chuyển về chờ nhận cọc.');
+    }
+    function depositBoxHtml(o) {
+      const d = state.deposits.find(x => x.orderId === o.id); if (!d) return '';
+      return d.paid ? `<div class="rounded-xl bg-green-50 border border-green-300 p-2.5 flex items-center justify-between gap-2"><span class="text-green-900 font-bold">✅ Đã nhận cọc 30%: ${money(d.amount)}<span class="block font-normal text-green-800">Còn thu khi giao: ${money(d.total - d.amount)}</span></span>${isDone(o) ? '' : `<button onclick="confirmDeposit('${escQ(o.id)}', false)" class="shrink-0 text-[13px] font-bold text-gray-500 underline">Hoàn lại</button>`}</div>`
+        : `<div class="rounded-xl bg-amber-50 border-2 border-amber-400 p-2.5 space-y-2"><p class="text-amber-900 font-bold">💰 Đơn nhóm${d.groupTitle ? ' “' + escQ(d.groupTitle) + '”' : ''}: khách chuyển cọc trước 30% = ${money(d.amount)}<span class="block font-normal text-amber-800">Kiểm tra tài khoản ngân hàng, nội dung có mã ${escQ(o.id)}. Còn thu khi giao: ${money(d.total - d.amount)}</span></p><button onclick="confirmDeposit('${escQ(o.id)}', true)" class="w-full bg-emerald-700 text-white rounded-xl py-3 font-extrabold">✅ Đã nhận ${money(d.amount)} tiền cọc</button></div>`;
+    }
     function ownerOrderCard(o) {
       const pend = o.status === 'PENDING_CONFIRMATION', done = isDone(o), open = !done || state.orderOpen[o.id];
       const nx = NEXT[o.status], ph = String(o.customerPhone || '').trim();
@@ -533,6 +570,7 @@
       const call = ph ? `<a href="tel:${escQ(ph)}" class="flex-1 text-center border border-sky-300 text-sky-800 bg-white rounded-xl py-3 font-extrabold">📞 ${escQ(ph)}</a><a href="https://zalo.me/${escQ(normPhone(ph))}" target="_blank" class="px-4 text-center border border-gray-300 bg-white rounded-xl py-3 font-bold">Zalo</a>` : '';
       return `<div class="rounded-2xl border-2 ${pend ? 'border-rose-400 bg-rose-50' : 'border-gray-100 bg-white'} p-3 space-y-2 shadow-sm text-[13px]">
         <div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="font-black text-[14px] text-gray-900">${escQ(o.id)}</span><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${(STATUS[o.status] || [0, ''])[1]}">${(STATUS[o.status] || [o.status])[0]}</span></div><p class="text-gray-500 mt-0.5">🕒 ${orderTime(o)} · ${escQ(o.customerName || 'Khách')} · ${n} món</p></div><b class="text-[17px] text-emerald-700 shrink-0">${money(o.total)}</b></div>
+        ${depositBoxHtml(o)}
         ${done && !open ? `<button onclick="state.orderOpen['${o.id}']=true; render();" class="w-full text-center text-[13px] font-bold text-sky-700">Xem chi tiết ▼</button>` : `
         ${call ? `<div class="flex gap-2">${call}</div>` : ''}
         <div class="space-y-1">${orderBodyHtml(o)}</div>
@@ -590,6 +628,10 @@
         ${sec('ship', '🚚', 'Giao hàng và nhận tiền', '', () => `<div class="${card}">
           <label class="block space-y-1"><span class="font-bold">Cách giao và phí giao (bạn tự thỏa thuận với khách)</span><textarea oninput="state.shipEdit=this.value;" class="field" placeholder="VD: Giao trong thôn 10k, ngoài thôn 20k. Khách đến lấy miễn phí.">${state.shipEdit ?? s.shipInfo ?? ''}</textarea></label>
           <label class="block space-y-1"><span class="font-bold">Cách nhận tiền</span><textarea oninput="state.payEdit=this.value;" class="field" placeholder="VD: Tiền mặt khi nhận. Hoặc chuyển khoản STK ...">${state.payEdit ?? s.payInfo ?? ''}</textarea></label>
+          <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-2.5 space-y-2"><b>🏦 Tài khoản nhận tiền cọc (đơn nhóm)</b><p class="text-gray-500">Khách đặt đơn nhóm sẽ chuyển trước 30% vào tài khoản này bằng mã QR. Nhập đúng để khách không chuyển nhầm.</p>
+            <select onchange="setBank('code', this.value)" class="field"><option value="">— Chọn ngân hàng —</option>${BANKS.map(b => `<option value="${b[0]}" ${(bankEdit(s).code) === b[0] ? 'selected' : ''}>${b[1]}</option>`).join('')}</select>
+            <input value="${attrQ(bankEdit(s).no)}" oninput="setBank('no', this.value)" inputmode="numeric" class="field" placeholder="Số tài khoản" />
+            <input value="${attrQ(bankEdit(s).holder)}" oninput="setBank('holder', this.value)" class="field" placeholder="Tên chủ tài khoản (VD: NGUYEN VAN A)" /></div>
           <button onclick="saveStoreInfo()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">Lưu thông tin</button></div>`)}
         ${sec('fee', '💳', 'Bản dùng thử miễn phí', dues.length ? ' <span class="text-rose-600">●</span>' : '', () => `<div class="${card}">${feeProgressHtml(n)}
           ${dues.map(d => `<p class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${d.n} đơn, phí ${money(d.fee)}, hạn đóng ${d.due.toLocaleDateString('vi-VN')}</p>`).join('')}
@@ -737,14 +779,15 @@
         ${o.unsynced ? `<div class="flex items-center justify-between bg-rose-50 text-rose-700 rounded-lg p-2 text-[13px] font-bold"><span>⚠️ Đơn chưa gửi được tới quán</span><button onclick="syncOrder(state.orders.find(x => x.id === '${o.id}'), true)" class="bg-rose-600 text-white px-2 py-1 rounded-lg">Gửi lại</button></div>` : ''}`;
     }
     function syncOrder(o, retry) {
-      if (!supabaseClient || !o) return;
-      supabaseClient.from('orders').insert([{
+      if (!supabaseClient || !o) return Promise.resolve(true);
+      return supabaseClient.from('orders').insert([{
         id: o.id, store_id: o.storeId, store_name: o.storeName, items: o.items, subtotal: o.subtotal, shipping_fee: o.shippingFee,
         total: o.total, fulfillment_method: o.fulfillmentMethod, pickup_time: o.pickupTime, status: o.status, customer_name: o.customerName,
         customer_phone: o.customerPhone, delivery_address: o.deliveryAddress, customer_note: o.customerNote, created_at: o.createdAt, marketing_consent: o.consent
       }]).then(({ error }) => {
-        if (error) { console.error('Lỗi lưu đơn Cloud:', error); showToast('⚠️ Đơn chưa gửi được tới quán: ' + error.message); return; }
+        if (error && error.code !== '23505') { console.error('Lỗi lưu đơn Cloud:', error); showToast('⚠️ Đơn chưa gửi được tới quán: ' + error.message); return false; }
         o.unsynced = false; saveState(); render(); if (retry) showToast('Đã gửi đơn tới quán.');
+        return true;
       });
     }
 
@@ -1204,7 +1247,7 @@
     // ===== NÚT CHỐT ĐƠN CHỈ SÁNG KHI ĐÃ ĐIỀN ĐỦ THÔNG TIN =====
     function checkoutReady() {
       if (state.tableCtx) return true;
-      if (state.groupCheckout && !state.groupDeliverAt) return false;
+      if (state.groupCheckout && (!state.groupDeliverAt || !state.checkoutName.trim())) return false;
       return normPhone(state.checkoutPhone).length >= 9
         && (state.fulfillmentMethod !== 'DELIVERY' || state.checkoutAddress.trim().length > 0);
     }
@@ -1327,6 +1370,15 @@
     const lsSet = (k, v) => { try { if (v === null || v === '') localStorage.removeItem(k); else localStorage.setItem(k, v); } catch {} };
     Object.assign(state, { groupId: lsGet(GKEY.id, ''), group: null, groupView: false, groupAsk: null, groupQR: false, groupCheckout: false, groupDeliverAt: '', groupReady: null, needMine: false });
     if (lsGet(GKEY.co, '')) { lsSet(GKEY.co, ''); state.cart = []; state.needMine = true; }   // app bị tắt giữa lúc chốt: lấy lại món của mình từ nhóm
+    // ===== ĐẶT CỌC 30%: mã QR VietQR + tài khoản ngân hàng của quán =====
+    const BANKS = [['VCB', 'Vietcombank'], ['ICB', 'VietinBank'], ['BIDV', 'BIDV'], ['VBA', 'Agribank'], ['MB', 'MB Bank'], ['TCB', 'Techcombank'], ['ACB', 'ACB'], ['VPB', 'VPBank'], ['TPB', 'TPBank'], ['STB', 'Sacombank'], ['SHB', 'SHB'], ['VIB', 'VIB'], ['HDB', 'HDBank'], ['OCB', 'OCB'], ['MSB', 'MSB'], ['EIB', 'Eximbank'], ['LPB', 'LPBank'], ['SEAB', 'SeABank']];
+    const bankName = c => (BANKS.find(b => b[0] === c) || [c, c])[1];
+    const depositOf = t => Math.min(Math.round(t), Math.ceil(t * 0.3 / 1000) * 1000);   // 30%, làm tròn lên 1.000đ (giống máy chủ)
+    const vnAscii = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').replace(/[^A-Za-z0-9 \-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const depContent = (title, oid) => ('COC30 ' + oid + ' ' + vnAscii(title)).slice(0, 50).trim();
+    const bankOk = s => !!(s && s.bankCode && /^\d{6,20}$/.test(String(s.bankNo || '')) && String(s.bankHolder || '').trim());
+    const vietQrUrl = (s, amount, content) => 'https://img.vietqr.io/image/' + encodeURIComponent(s.bankCode) + '-' + encodeURIComponent(s.bankNo) + '-compact2.png?amount=' + amount + '&addInfo=' + encodeURIComponent(content) + '&accountName=' + encodeURIComponent(vnAscii(s.bankHolder).toUpperCase());
+    function copyTxt(t) { try { navigator.clipboard.writeText(String(t)).then(() => showToast('Đã sao chép: ' + t), () => showToast(String(t))); } catch { showToast(String(t)); } }
     const groupLink = id => location.href.split('#')[0] + '#nhom=' + encodeURIComponent(id);
     const gName = () => (lsGet(GKEY.name, '') || '').trim();
     const inGroup = () => !!state.groupId;
@@ -1335,6 +1387,7 @@
     const groupMsg = () => !inGroup() ? '' : !state.group ? 'Đang tải nhóm, bạn thử lại sau giây lát nhé.'
       : state.group.status === 'open' ? '' : state.group.status === 'ordered' ? 'Nhóm đã đặt đơn rồi, không thêm món được nữa.' : state.group.status === 'expired' ? 'Nhóm đã hết hạn.' : 'Người tạo nhóm đã khóa nhóm để đặt đơn.';
     const mapGroup = d => d && ({ id: d.id, title: d.title, status: d.status, isHost: !!d.is_host, hostId: d.host_id, me: d.me, expiresAt: d.expires_at, orderIds: d.order_ids || '',
+      deposits: (d.deposits || []).map(x => ({ orderId: x.order_id, storeId: x.store_id, total: Number(x.total) || 0, amount: Number(x.amount) || 0, paid: x.status === 'paid' })),
       items: (d.items || []).map(i => ({ id: i.id, uid: i.user_id, person: i.person, cartKey: i.cart_key, foodId: i.food_id, storeId: i.store_id, storeName: i.store_name || '', name: i.name, desc: i.descr || '', unitPrice: Number(i.unit_price) || 0, quantity: Number(i.quantity) || 0 })) });
     const toCartItem = i => ({ cartKey: i.cartKey, foodId: i.foodId, storeId: i.storeId, storeName: i.storeName, name: i.name, desc: i.desc, image: (state.foods.find(f => f.id === i.foodId) || {}).image || '', unitPrice: i.unitPrice, quantity: i.quantity });
     const groupNoSql = e => /function|schema cache|does not exist|not find/i.test((e && e.message) || '');
@@ -1430,9 +1483,17 @@
       setTimeout(() => { gBusy = false; loadGroup(true); }, 0);
     }
     function endGroupCheckout() { state.showCheckout = false; render(); }
-    function groupDone(ids) {   // đã đặt xong: đánh dấu nhóm, rời nhóm, trả lại giỏ riêng
+    async function groupFinishNow() {   // trưởng nhóm bấm "Hoàn thành đơn": chỉ được khi mọi quán đã xác nhận nhận cọc (máy chủ kiểm tra lại)
+      const g = state.group; if (!g || !g.isHost || !g.deposits.length || g.deposits.some(d => !d.paid)) return;
+      const r = await supabaseClient.rpc('group_finish', { p_group: g.id, p_order_ids: g.deposits.map(d => d.orderId).join(',') });
+      if (r.error) { showToast(r.error.message); gBusy = false; loadGroup(true); return; }
+      const rest = g.deposits.reduce((a, d) => a + d.total - d.amount, 0);
+      groupDone(g.deposits.map(d => d.orderId), true); setTab('orders');
+      showToast('Đã hoàn thành đơn nhóm. Phần còn lại ' + money(rest) + ' trả khi nhận hàng.');
+    }
+    function groupDone(ids, skipRpc) {   // đã đặt xong: đánh dấu nhóm, rời nhóm, trả lại giỏ riêng
       const gid = state.groupId; state.groupCheckout = false; lsSet(GKEY.co, '');
-      if (supabaseClient && gid) supabaseClient.rpc('group_finish', { p_group: gid, p_order_ids: ids.join(',') }).then(r => { if (r.error) setTimeout(() => supabaseClient.rpc('group_finish', { p_group: gid, p_order_ids: ids.join(',') }), 2000); });
+      if (!skipRpc && supabaseClient && gid) supabaseClient.rpc('group_finish', { p_group: gid, p_order_ids: ids.join(',') }).then(r => { if (r.error) setTimeout(() => supabaseClient.rpc('group_finish', { p_group: gid, p_order_ids: ids.join(',') }), 2000); });
       state.groupId = ''; state.group = null; state.groupView = false; lsSet(GKEY.id, '');
       try { const solo = JSON.parse(lsGet(GKEY.solo, '[]')); state.cart = Array.isArray(solo) ? solo : []; } catch { state.cart = []; }
       lsSet(GKEY.solo, ''); saveState();
@@ -1476,9 +1537,10 @@
       const total = all.reduce((a, i) => a + i.unitPrice * i.quantity, 0), qty = all.reduce((a, i) => a + i.quantity, 0);
       const stores = new Map(); all.forEach(i => { const s = stores.get(i.storeId) || { name: i.storeName, q: 0, t: 0 }; s.q += i.quantity; s.t += i.unitPrice * i.quantity; stores.set(i.storeId, s); });
       const hrs = Math.max(0, Math.round((new Date(g.expiresAt) - Date.now()) / 36e5));
-      const banner = open ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">● Nhóm đang mở, ai có link cũng chọn món được. Còn khoảng ${hrs} giờ.</p>`
+      const dep = g.deposits || [], paying = dep.length > 0 && g.status === 'locked', allPaid = dep.length > 0 && dep.every(d => d.paid);
+      const banner = paying ? (allPaid ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">✅ Các quán đã nhận tiền cọc. ${g.isHost ? 'Bạn bấm “Hoàn thành đơn” bên dưới nhé.' : 'Chờ trưởng nhóm hoàn thành đơn.'}</p>` : `<p class="bg-amber-50 text-amber-900 rounded-xl px-3 py-2 text-[13px] font-semibold">💰 Đơn đã gửi tới quán. ${g.isHost ? 'Hãy chuyển khoản đặt cọc 30% theo mã QR bên dưới, quán xác nhận xong là bạn hoàn thành được đơn.' : 'Trưởng nhóm đang đặt cọc 30% cho các quán.'}</p>`) : open ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">● Nhóm đang mở, ai có link cũng chọn món được. Còn khoảng ${hrs} giờ.</p>`
         : g.status === 'locked' ? `<p class="bg-amber-50 text-amber-900 rounded-xl px-3 py-2 text-[13px] font-semibold">🔒 Nhóm đã khóa, ${g.isHost ? 'bạn đang chuẩn bị đặt đơn.' : 'người tạo nhóm đang chuẩn bị đặt đơn.'}</p>`
-        : g.status === 'ordered' ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">✅ Nhóm đã đặt đơn thành công. Các quán sẽ xác nhận và giao.${g.orderIds ? '<br>Mã đơn: ' + escQ(g.orderIds) : ''}</p>`
+        : g.status === 'ordered' ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">✅ Nhóm đã đặt đơn thành công. Các quán sẽ xác nhận và giao.${dep.length ? '<br>Đã cọc ' + money(dep.reduce((a, d) => a + d.amount, 0)) + ', còn lại ' + money(dep.reduce((a, d) => a + d.total - d.amount, 0)) + ' trả khi nhận hàng.' : ''}${g.orderIds ? '<br>Mã đơn: ' + escQ(g.orderIds) : ''}</p>`
         : `<p class="bg-gray-100 text-gray-600 rounded-xl px-3 py-2 text-[13px] font-semibold">Nhóm đã hết hạn.</p>`;
       const person = uid => { const rows = all.filter(i => i.uid === uid), isMe = uid === me, nm = rows[0].person, sub = rows.reduce((a, i) => a + i.unitPrice * i.quantity, 0);
         return `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm"><div class="flex items-center justify-between gap-2"><b class="text-[15px] text-gray-900 truncate">👤 ${escQ(nm)}${isMe ? ' <span class="text-gac">(Bạn)</span>' : ''}${uid === g.hostId ? ' <span class="text-[13px] font-bold text-emerald-700">Người tạo</span>' : ''}</b><b class="text-gac text-[14px] shrink-0">${money(sub)}</b></div>
@@ -1487,21 +1549,39 @@
             ${i.mine && open ? `<div class="flex items-center bg-gray-100 rounded-full shrink-0"><button onclick="changeQty('${escQ(i.cartKey)}', -1)" class="w-9 h-9 rounded-full font-bold text-[18px]">−</button><b class="min-w-[22px] text-center">${i.quantity}</b><button onclick="changeQty('${escQ(i.cartKey)}', 1)" class="w-9 h-9 rounded-full font-bold text-[18px]">+</button></div>`
               : `<b class="shrink-0 text-gray-700">× ${i.quantity}</b>${g.isHost && open && !i.mine ? `<button onclick="groupRemove('${i.id}')" class="shrink-0 text-rose-600 font-bold px-1" aria-label="Xóa món">✕</button>` : ''}`}</div>`).join('')}</div>`; };
       const foot = open ? `<div class="flex gap-2">${back.replace('h-10 px-3 rounded-full bg-white/15 text-white', 'flex-1 py-3 rounded-xl bg-white border border-emerald-700 text-emerald-800 font-extrabold').replace('‹ Thêm món', '＋ Thêm món')}${g.isHost ? `<button onclick="groupCheckoutStart()" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">🔒 Chốt và đặt đơn</button>` : ''}</div>${g.isHost ? '' : '<p class="text-[13px] text-gray-500 text-center">Khi mọi người chọn xong, người tạo nhóm sẽ bấm chốt để đặt đơn.</p>'}`
-        : g.status === 'locked' && g.isHost ? `<div class="flex gap-2"><button onclick="groupSetStatus('open')" class="flex-1 py-3 rounded-xl bg-white border border-emerald-700 text-emerald-800 text-[14px] font-extrabold">Mở lại để sửa</button><button onclick="groupCheckoutStart()" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">Đặt đơn</button></div>` : '';
+        : paying && g.isHost ? `<button onclick="groupFinishNow()" ${allPaid ? '' : 'disabled'} class="w-full py-3.5 rounded-xl text-[15px] font-extrabold ${allPaid ? 'bg-emerald-700 text-white shadow-lg' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}">${allPaid ? '✅ Hoàn thành đơn · còn lại ' + money(dep.reduce((a, d) => a + d.total - d.amount, 0)) : 'Hoàn thành đơn (chờ quán xác nhận cọc ' + dep.filter(d => d.paid).length + '/' + dep.length + ')'}</button><p class="text-[13px] text-center ${allPaid ? 'text-emerald-800 font-semibold' : 'text-gray-500'}">${allPaid ? 'Đã cọc ' + money(dep.reduce((a, d) => a + d.amount, 0)) + '. Số tiền còn lại trả cho quán khi nhận hàng.' : 'Nút sáng lên khi quán bấm xác nhận đã nhận tiền cọc.'}</p>` : paying ? '' : g.status === 'locked' && g.isHost ? `<div class="flex gap-2"><button onclick="groupSetStatus('open')" class="flex-1 py-3 rounded-xl bg-white border border-emerald-700 text-emerald-800 text-[14px] font-extrabold">Mở lại để sửa</button><button onclick="groupCheckoutStart()" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">Đặt đơn</button></div>` : '';
       return `<div class="fixed inset-0 z-50 bg-[#F6F3EF] max-w-md mx-auto flex flex-col"><div class="bg-bark text-white px-4 pt-3 pb-3 space-y-2 shrink-0"><div class="flex items-center justify-between gap-2">${back}<button onclick="leaveGroup()" class="text-[13px] text-white/70 font-bold px-2">Rời nhóm</button></div>
           <h2 class="font-display text-[22px] leading-tight font-bold">${escQ(g.title)}</h2><p class="text-[13px] text-white/75">${new Set(all.map(i => i.uid)).size} người · ${stores.size} quán · ${qty} phần</p></div>
         <div data-scroll="gv" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">${banner}
-          ${g.isHost && (open || g.status === 'locked') ? `<div class="flex gap-2"><button onclick="shareGroup()" class="flex-1 py-2.5 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">📤 Chia sẻ</button><button onclick="state.groupQR=true; render();" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">▦ Mã QR</button><button onclick="copyGroupLink()" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">🔗 Chép link</button></div>` : ''}
+          ${paying ? groupPayHtml(g) : ''}
+          ${g.isHost && (open || g.status === 'locked') && !paying ? `<div class="flex gap-2"><button onclick="shareGroup()" class="flex-1 py-2.5 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">📤 Chia sẻ</button><button onclick="state.groupQR=true; render();" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">▦ Mã QR</button><button onclick="copyGroupLink()" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">🔗 Chép link</button></div>` : ''}
           ${order.length ? order.map(person).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center text-[14px] text-gray-500">Chưa có ai chọn món. Bấm “Thêm món” để bắt đầu' + (g.isHost ? ', rồi chia sẻ link cho bạn bè' : '') + '.</div>'}
           ${stores.size ? `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-1.5 shadow-sm"><b class="text-[14px]">Theo từng quán</b>${[...stores.values()].map(s => `<div class="flex justify-between text-[13px]"><span>🏪 ${escQ(s.name)} · ${s.q} phần</span><b>${money(s.t)}</b></div>`).join('')}<p class="text-[13px] text-gray-400 pt-1">Mỗi quán nhận một đơn riêng, giao chung tới một địa chỉ. Phí giao (nếu có) do quán tính thêm.</p></div>` : ''}
           <div class="flex justify-between items-center bg-white rounded-2xl border border-gray-100 p-3 shadow-sm"><span class="font-extrabold text-[15px]">Tổng tiền món</span><b class="text-gac text-[18px]">${money(total)}</b></div></div>
         ${foot ? `<div class="shrink-0 bg-white border-t p-3 space-y-2">${foot}</div>` : ''}</div>`;
     }
+    // Khu vực đặt cọc 30% trong màn hình nhóm: mỗi quán một mã QR (trưởng nhóm), trạng thái chờ / đã nhận (mọi người)
+    function groupPayHtml(g) {
+      const dep = g.deposits, tot = dep.reduce((a, d) => a + d.total, 0), coc = dep.reduce((a, d) => a + d.amount, 0), got = dep.filter(d => d.paid).reduce((a, d) => a + d.amount, 0);
+      const sum = `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-1 shadow-sm text-[13px]"><div class="flex justify-between"><span>Tổng đơn (${dep.length} quán)</span><b>${money(tot)}</b></div><div class="flex justify-between"><span>Cọc trước 30%</span><b class="text-gac">${money(coc)}</b></div><div class="flex justify-between"><span>Quán đã xác nhận nhận</span><b class="${got === coc ? 'text-emerald-700' : 'text-amber-700'}">${money(got)}</b></div><div class="flex justify-between border-t pt-1 font-extrabold"><span>Còn lại trả khi nhận hàng</span><b>${money(tot - coc)}</b></div></div>`;
+      const card = d => {
+        const st = state.stores.find(x => x.id === d.storeId) || { name: 'Quán', phone: '' }, name = (g.items.find(i => i.storeId === d.storeId) || {}).storeName || st.name, content = depContent(g.title, d.orderId);
+        const chip = d.paid ? '<span class="shrink-0 text-[13px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">✅ Quán đã nhận cọc</span>' : '<span class="shrink-0 text-[13px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ Chờ quán xác nhận</span>';
+        const line = (k, v, copy) => `<div class="flex items-center justify-between gap-2"><span class="text-gray-500 shrink-0">${k}</span><span class="font-bold text-gray-900 text-right break-all">${escQ(v)}</span>${copy ? `<button data-t="${attrQ(copy)}" onclick="copyTxt(this.dataset.t)" class="shrink-0 text-[13px] font-bold text-emerald-700 px-1">Chép</button>` : ''}</div>`;
+        const pay = d.paid || !g.isHost ? '' : bankOk(st) ? `<div class="text-center"><img src="${attrQ(vietQrUrl(st, d.amount, content))}" alt="Mã QR chuyển khoản" class="w-60 h-60 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-500 mt-1">Quét bằng app ngân hàng: số tiền và nội dung điền sẵn.</p></div>
+            <div class="bg-gray-50 rounded-xl p-2.5 space-y-1.5 text-[13px]">${line('Ngân hàng', bankName(st.bankCode))}${line('Số tài khoản', st.bankNo, st.bankNo)}${line('Chủ tài khoản', st.bankHolder)}${line('Số tiền', money(d.amount), String(d.amount))}${line('Nội dung', content, content)}</div>`
+          : `<div class="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-[13px] text-rose-800">Quán chưa cập nhật số tài khoản ngân hàng. Hãy gọi quán để chuyển khoản <b>${money(d.amount)}</b> với nội dung <b>${escQ(content)}</b>.${st.phone ? ` <a href="tel:${escQ(st.phone)}" class="font-extrabold underline">📞 ${escQ(st.phone)}</a>` : ''}</div>`;
+        return `<div class="bg-white rounded-2xl border ${d.paid ? 'border-green-200' : 'border-amber-300'} p-3 space-y-2 shadow-sm"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><b class="text-[15px] block truncate">🏪 ${escQ(name)}</b><span class="text-[13px] text-gray-500">Mã đơn ${escQ(d.orderId)} · tổng ${money(d.total)}</span></div>${chip}</div>
+          <div class="flex justify-between text-[14px]"><span>Cọc 30% cần chuyển</span><b class="text-gac">${money(d.amount)}</b></div>${pay}</div>`;
+      };
+      return sum + dep.map(card).join('');
+    }
     function groupCheckoutBoxHtml() {
       const g = state.group, n = g ? new Set(g.items.map(i => i.uid)).size : 0, now = new Date(Date.now() - new Date().getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
       return `<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2"><b class="text-[14px] text-amber-900">👥 Đơn nhóm “${escQ(g ? g.title : '')}” · ${n} người</b>
         <label class="block space-y-1"><span class="text-[13px] font-bold">Cần giao lúc mấy giờ, ngày nào? *</span><input type="datetime-local" min="${now}" value="${escQ(state.groupDeliverAt)}" oninput="state.groupDeliverAt=this.value; updateCheckoutBtn();" class="field" /></label>
-        <p class="text-[13px] text-amber-900/80">Mỗi quán sẽ nhận một đơn riêng, giao tới địa chỉ bên dưới đúng giờ này. Trên đơn có ghi tên từng người để quán chia phần.</p></div>`;
+        <p class="text-[13px] text-amber-900/80">Mỗi quán sẽ nhận một đơn riêng, giao tới địa chỉ bên dưới đúng giờ này. Trên đơn có ghi tên từng người để quán chia phần.</p>
+        <p class="text-[13px] bg-white border border-amber-200 rounded-lg px-2.5 py-2 text-amber-900">💰 <b>Đặt cọc trước 30%</b> tổng tiền mỗi quán. Sau khi bấm gửi đơn, app hiện mã QR chuyển khoản. Khi quán xác nhận đã nhận tiền, bạn bấm <b>Hoàn thành đơn</b>. Phần còn lại trả khi nhận hàng.</p></div>`;
     }
 
     // ===== ĐẶT MÓN TẠI BÀN BẰNG MÃ QR · GỌI NHÂN VIÊN · YÊU CẦU THANH TOÁN =====
@@ -1967,13 +2047,16 @@
       const address = state.tableCtx ? 'Bàn ' + state.tableCtx.table : state.fulfillmentMethod === 'DELIVERY' ? state.checkoutAddress.trim() : 'Khách đến lấy lúc ' + state.pickupTime;
       if (!state.tableCtx && (!phone || (state.fulfillmentMethod === 'DELIVERY' && !address))) { showToast('Vui lòng điền đủ thông tin nhận hàng.'); return; }
       if (state.groupCheckout && new Date(state.groupDeliverAt).getTime() < Date.now()) return showToast('Giờ cần giao phải ở phía sau thời điểm hiện tại.');
-      const gnote = state.groupCheckout ? groupNote() : '';
-      const now = new Date().toISOString(), ids = [];
+      const gmode = state.groupCheckout, gnote = gmode ? groupNote() : '';
+      if (gmode && state.placing) return;
+      if (gmode && !state.checkoutName.trim()) return showToast('Vui lòng nhập họ và tên của trưởng nhóm.');
+      const now = new Date().toISOString(), ids = [], syncs = []; state.gIds = state.gIds || {};
+      if (gmode) state.placing = true;
       cartGroups().forEach(g => {
         const st = state.stores.find(s => s.id === g.storeId);
         const ship = state.fulfillmentMethod === 'DELIVERY' ? state.shippingFee : 0;
         const o = {
-          id: 'SF-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
+          id: gmode ? (state.gIds[g.storeId] = state.gIds[g.storeId] || 'SF-' + Math.random().toString(36).slice(2, 7).toUpperCase()) : 'SF-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
           storeId: g.storeId, storeName: st ? st.name : g.storeName, storePhone: st ? (st.phone || '') : '',
           items: g.items.map(i => ({ ...i })), subtotal: g.subtotal, shippingFee: ship, total: g.subtotal + ship,
           fulfillmentMethod: state.fulfillmentMethod, pickupTime: state.fulfillmentMethod === 'PICKUP' ? state.pickupTime : null,
@@ -1981,12 +2064,25 @@
           createdAt: now, unsynced: !!supabaseClient, customerId: state.user ? state.user.id : null, consent: state.checkoutConsent,
           events: [{ status: 'PENDING_CONFIRMATION', label: 'Khách gửi đơn', at: now }]
         };
-        state.orders.unshift(o); ids.push(o.id); syncOrder(o); adOrder(g.storeId, g.subtotal);
+        state.orders = state.orders.filter(x => x.id !== o.id); state.orders.unshift(o); ids.push(o.id);
+        if (gmode) { o.customerNote = (o.customerNote + '\n💰 Đặt cọc trước 30% = ' + money(depositOf(o.total)) + ' (chờ quán xác nhận đã nhận tiền)').trim(); syncs.push(syncOrder(o)); } else { syncOrder(o); adOrder(g.storeId, g.subtotal); }
       });
+      if (gmode) {   // đơn nhóm: gửi đủ các đơn lên máy chủ, tạo khoản cọc, rồi hiện mã QR thanh toán. Chưa trả giỏ riêng, chưa rời nhóm.
+        try {
+          const oks = await Promise.all(syncs);
+          if (oks.includes(false)) return showToast('Chưa gửi được đơn tới quán. Bạn kiểm tra mạng rồi bấm lại nhé (không bị đặt trùng).');
+          const r = await supabaseClient.rpc('group_deposit_create', { p_group: state.groupId, p_orders: ids });
+          if (r.error) return showToast(groupNoSql(r.error) ? 'Chủ app cần chạy file group-deposit-setup.sql trong Supabase để dùng đặt cọc.' : 'Chưa tạo được khoản cọc: ' + r.error.message);
+        } finally { state.placing = false; }
+        cartGroups().forEach(g => adOrder(g.storeId, g.subtotal));
+        state.profile = { ...state.profile, name, phone, address }; saveProfile(true);
+        state.gIds = {}; state.cart = []; state.showCheckout = false; state.checkoutNote = ''; state.groupCheckout = false; lsSet(GKEY.co, ''); state.groupView = true; saveState();
+        gBusy = false; await loadGroup(true); render();
+        return showToast('Đã gửi đơn tới ' + ids.length + ' quán. Hãy chuyển khoản đặt cọc 30% theo mã QR nhé!');
+      }
       if (!state.tableCtx) { state.profile = { ...state.profile, name, phone, address: state.fulfillmentMethod === 'DELIVERY' ? address : state.profile.address };
       saveProfile(true); }
       state.cart = []; state.showCheckout = false; state.checkoutNote = ''; saveState();
-      if (state.groupCheckout) groupDone(ids);
       if (state.lockedStoreId) { state.lastOrderIds = ids; state.viewStoreId = state.lockedStoreId; render(); }
       else { state.viewStoreId = ''; setTab('orders'); }
       showToast(ids.length > 1 ? `Đã gửi ${ids.length} đơn tới ${ids.length} quán!` : `Đã gửi đơn hàng ${ids[0]} thành công!`);
@@ -2352,7 +2448,7 @@
                   <button onclick="state.fulfillmentMethod='DELIVERY'; render();" class="flex-1 py-1.5 rounded-lg text-[13px] font-bold ${state.fulfillmentMethod==='DELIVERY'?'bg-emerald-700 text-white':''}">🛵 Giao tận nơi</button>
                   <button onclick="state.fulfillmentMethod='PICKUP'; render();" class="flex-1 py-1.5 rounded-lg text-[13px] font-bold ${state.fulfillmentMethod==='PICKUP'?'bg-emerald-700 text-white':''}">🛍️ Tới lấy</button>
                 </div>
-                <label class="block space-y-1"><span class="text-[13px] font-bold">Họ và tên (không bắt buộc)</span><input value="${state.checkoutName}" oninput="state.checkoutName=this.value; updateCheckoutBtn();" class="field" /></label>
+                <label class="block space-y-1"><span class="text-[13px] font-bold">Họ và tên${state.groupCheckout ? ' *' : ' (không bắt buộc)'}</span><input value="${state.checkoutName}" oninput="state.checkoutName=this.value; updateCheckoutBtn();" class="field" /></label>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Số điện thoại *</span><input value="${state.checkoutPhone}" oninput="state.checkoutPhone=this.value; updateCheckoutBtn();" class="field" /></label>
                 ${state.fulfillmentMethod==='DELIVERY' ? `<label class="block space-y-1"><span class="text-[13px] font-bold">Địa chỉ giao *</span><textarea oninput="state.checkoutAddress=this.value; updateCheckoutBtn();" class="field">${state.checkoutAddress}</textarea></label>` : ''}`}
                 ${state.groupCheckout ? groupCheckoutBoxHtml() : ''}
@@ -2364,8 +2460,8 @@
                 </div>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Ghi chú cho quán (không bắt buộc)</span><textarea oninput="state.checkoutNote=this.value;" class="field min-h-16" placeholder="VD: ít cay, thêm hành, giao sau 18h, gọi trước khi đến...">${state.checkoutNote.replace(/</g, '&lt;')}</textarea></label>
                 <label class="flex gap-2 text-[13px] text-gray-600"><input type="checkbox" ${state.checkoutConsent ? 'checked' : ''} onchange="state.checkoutConsent=this.checked" /> Đồng ý nhận tin ưu đãi từ quán qua Zalo/SMS</label>
-                <button id="chotBtn" onclick="placeOrder()" ${checkoutReady() ? '' : 'disabled'} class="w-full py-3.5 rounded-xl text-[13px] font-extrabold ${checkoutReady() ? 'bg-emerald-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}">Hoàn thành ${cartGroups().length > 1 ? cartGroups().length + ' đơn' : 'đơn'} · ${money(total)}</button>
-                <p id="chotHint" class="text-[13px] text-rose-500 text-center ${checkoutReady() ? 'hidden' : ''}">Nhập số điện thoại${state.fulfillmentMethod === 'DELIVERY' ? ', địa chỉ giao' : ''}${state.groupCheckout ? ', giờ cần giao' : ''} để hoàn thành đơn.</p>
+                <button id="chotBtn" onclick="placeOrder()" ${checkoutReady() ? '' : 'disabled'} class="w-full py-3.5 rounded-xl text-[13px] font-extrabold ${checkoutReady() ? 'bg-emerald-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}">${state.groupCheckout ? 'Gửi đơn và lấy mã QR đặt cọc 30% · ' + money(cartGroups().reduce((a, g) => a + depositOf(g.subtotal + (state.fulfillmentMethod === 'DELIVERY' ? state.shippingFee : 0)), 0)) : 'Hoàn thành ' + (cartGroups().length > 1 ? cartGroups().length + ' đơn' : 'đơn') + ' · ' + money(total)}</button>
+                <p id="chotHint" class="text-[13px] text-rose-500 text-center ${checkoutReady() ? 'hidden' : ''}">Nhập ${state.groupCheckout ? 'họ và tên, ' : ''}số điện thoại${state.fulfillmentMethod === 'DELIVERY' ? ', địa chỉ giao' : ''}${state.groupCheckout ? ', giờ cần giao' : ''} để ${state.groupCheckout ? 'tiếp tục' : 'hoàn thành đơn'}.</p>
               </div>
             </div>
           </div>
