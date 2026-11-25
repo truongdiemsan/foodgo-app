@@ -614,6 +614,42 @@
         ${ownerMenuHtml(foods)}
         ${ownerSettingsHtml(s)}`;
     }
+    // ===== ADMIN: SAO CHÉP THỰC ĐƠN (tên món, hình ảnh, giá, size, tùy chọn...) từ quán này sang quán mới =====
+    state.copyMenu = null;
+    function openCopyMenu(id) { if (!state.isAdmin) return; state.copyMenu = { from: id, to: '', busy: false }; render(); }
+    function copyMenuHtml() {
+      const c = state.copyMenu; if (!c || !state.isAdmin) return '';
+      const src = state.stores.find(x => x.id === c.from); if (!src) return '';
+      const foods = state.foods.filter(f => f.storeId === c.from), others = state.stores.filter(x => x.id !== c.from);
+      const dst = state.stores.find(x => x.id === c.to), have = dst ? new Set(state.foods.filter(f => f.storeId === dst.id).map(f => f.name.trim().toLowerCase())) : new Set();
+      const dup = foods.filter(f => have.has(f.name.trim().toLowerCase())).length, add = foods.length - dup;
+      return `<div class="fixed inset-0 z-[60] bg-black/60 flex items-end justify-center" onclick="state.copyMenu=null; render();"><div class="bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3 shadow-2xl" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between"><h3 class="font-extrabold text-[16px]">📋 Sao chép thực đơn</h3><button onclick="state.copyMenu=null; render();" class="w-9 h-9 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
+        <p class="text-[13px] text-gray-600">Chép toàn bộ món (tên, hình ảnh, giá, size, tùy chọn) của <b>${escQ(src.name)}</b> (${foods.length} món) sang quán mới. Quán mới sau đó chỉ cần sửa lại giá hoặc món khác.</p>
+        ${others.length ? `<label class="block space-y-1"><span class="text-[13px] font-bold">Chép sang quán</span><select onchange="state.copyMenu.to=this.value; render();" class="field"><option value="">— Chọn quán nhận —</option>${others.map(o => `<option value="${attrQ(o.id)}" ${o.id === c.to ? 'selected' : ''}>${escQ(o.name)}</option>`).join('')}</select></label>` : '<p class="text-[13px] text-rose-600 font-bold">Chưa có quán nào khác. Hãy tạo quán mới trước (chủ quán đăng ký hoặc bạn tạo quán), rồi quay lại sao chép.</p>'}
+        ${dst ? `<p class="text-[13px] bg-emerald-50 text-emerald-900 rounded-xl px-3 py-2">Sẽ thêm <b>${add}</b> món vào <b>${escQ(dst.name)}</b>${dup ? `. Bỏ qua <b>${dup}</b> món trùng tên đã có sẵn.` : '.'} Quán nguồn giữ nguyên.</p>` : ''}
+        <div class="flex gap-2"><button onclick="state.copyMenu=null; render();" class="px-4 py-3 border rounded-xl text-[14px] font-bold">Hủy</button><button onclick="doCopyMenu()" ${dst && add > 0 && !c.busy ? '' : 'disabled'} class="flex-1 py-3 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold disabled:opacity-40">${c.busy ? 'Đang sao chép...' : 'Sao chép ' + (dst ? add + ' món' : 'thực đơn')}</button></div></div></div>`;
+    }
+    async function doCopyMenu() {
+      const c = state.copyMenu; if (!c || !state.isAdmin || c.busy || !c.to) return;
+      const dst = state.stores.find(x => x.id === c.to); if (!dst) return;
+      const have = new Set(state.foods.filter(f => f.storeId === dst.id).map(f => f.name.trim().toLowerCase()));
+      const list = state.foods.filter(f => f.storeId === c.from && !have.has(f.name.trim().toLowerCase()));
+      if (!list.length) return showToast('Không có món nào để chép.');
+      const stamp = Date.now(), copies = list.map((f, i) => ({ id: 'f_' + stamp + '_' + i, storeId: dst.id, name: f.name, price: f.price, category: f.category, description: f.description || '', image: f.image, inStock: true, note: f.note || '', sizes: JSON.parse(JSON.stringify(f.sizes || [])), groups: JSON.parse(JSON.stringify(f.groups || [])) }));
+      c.busy = true; render();
+      if (supabaseClient) {
+        const rows = copies.map(n => ({ id: n.id, store_id: n.storeId, name: n.name, price: n.price, category: n.category, description: n.description, image: n.image, in_stock: true, ...(n.note ? { note: n.note } : {}), ...(n.sizes.length ? { sizes: n.sizes } : {}), ...(n.groups.length ? { opt_groups: n.groups } : {}) }));
+        for (let i = 0; i < rows.length; i += 20) {
+          const { error } = await supabaseClient.from('foods').insert(rows.slice(i, i + 20));
+          if (error) { c.busy = false; render(); return showToast('Chưa chép được: ' + error.message); }
+        }
+      }
+      state.foods = [...copies.slice().reverse(), ...state.foods];
+      state.copyMenu = null; saveState(); render();
+      showToast('Đã chép ' + copies.length + ' món sang "' + dst.name + '". Bấm "Quản lý quán này" để chỉnh sửa.');
+    }
+
     function adminHtml() {
       const cur = ymOf(Date.now());
       const rows = state.stores.map(s => ({ s, n: storeMonths(s.id)[cur] || 0, dues: feeDue(s.id).filter(d => !d.paid) })).sort((a, b) => b.dues.filter(isLate).length - a.dues.filter(isLate).length);
@@ -627,7 +663,7 @@
           <div class="flex justify-between"><b>${r.s.name}</b><span class="text-gray-500">${r.n} đơn tháng này</span></div>
           <p class="text-gray-500">SĐT: ${r.s.phone}${r.s.suspended ? ' · <b class="text-rose-600">đang ẩn</b>' : ''}</p>
           ${r.dues.map(d => `<div class="flex justify-between items-center"><span class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${money(d.fee)} (hạn ${d.due.toLocaleDateString('vi-VN')})</span><button onclick="markPaid('${r.s.id}','${d.ym}',${d.fee})" class="bg-emerald-700 text-white px-2 py-1 rounded-lg text-[13px] font-bold">Đã thu</button></div>`).join('')}
-          <div class="flex flex-wrap items-center gap-3 pt-1"><button onclick="manageStore('${r.s.id}')" class="bg-emerald-700 text-white px-3 rounded-lg text-[13px] font-bold">🛠️ Quản lý quán này</button><button onclick="setSuspended('${r.s.id}', ${!r.s.suspended})" class="text-[13px] font-bold ${r.s.suspended ? 'text-emerald-700' : 'text-rose-600'}">${r.s.suspended ? 'Mở lại quán' : 'Tạm ẩn quán'}</button><button onclick="deleteStore('${r.s.id}')" class="text-[13px] font-bold text-rose-600">🗑 Xóa quán</button></div></div>`).join('')}
+          <div class="flex flex-wrap items-center gap-3 pt-1"><button onclick="manageStore('${r.s.id}')" class="bg-emerald-700 text-white px-3 rounded-lg text-[13px] font-bold">🛠️ Quản lý quán này</button><button onclick="openCopyMenu('${r.s.id}')" class="bg-white border border-emerald-700 text-emerald-800 px-3 rounded-lg text-[13px] font-bold">📋 Sao chép thực đơn</button><button onclick="setSuspended('${r.s.id}', ${!r.s.suspended})" class="text-[13px] font-bold ${r.s.suspended ? 'text-emerald-700' : 'text-rose-600'}">${r.s.suspended ? 'Mở lại quán' : 'Tạm ẩn quán'}</button><button onclick="deleteStore('${r.s.id}')" class="text-[13px] font-bold text-rose-600">🗑 Xóa quán</button></div></div>`).join('')}
       </div>`;
     }
 
@@ -2337,6 +2373,7 @@
       }
 
       if (state.groupQR && state.groupId) html += groupQrHtml();
+      if (state.copyMenu) html += copyMenuHtml();
       if (state.groupAsk) html += groupAskHtml();
 
       // CREATE STORE MODAL
