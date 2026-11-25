@@ -1366,7 +1366,7 @@
     // ===== ĐƠN NHÓM: nhiều người, nhiều quán, một giỏ chung chia sẻ bằng link / QR =====
     // Mỗi người chọn món như bình thường. Món của mình tự đồng bộ lên nhóm, ai có link cũng thấy món của cả nhóm.
     // Người tạo nhóm chốt đơn một lần: app tách thành mỗi quán một đơn, giao tới một địa chỉ, một giờ.
-    const GKEY = { id: 'fg_group', name: 'fg_gname', solo: 'fg_solo', co: 'fg_gco' };
+    const GKEY = { id: 'fg_group', name: 'fg_gname', solo: 'fg_solo', co: 'fg_gco', temp: 'fg_gtemp' };
     const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } };
     const lsSet = (k, v) => { try { if (v === null || v === '') localStorage.removeItem(k); else localStorage.setItem(k, v); } catch {} };
     Object.assign(state, { groupId: lsGet(GKEY.id, ''), group: null, groupView: false, groupAsk: null, groupQR: false, groupCheckout: false, groupDeliverAt: '', groupReady: null, needMine: false });
@@ -1386,7 +1386,7 @@
     const groupOpen = () => !!(state.group && state.group.status === 'open');
     const gSafe = t => String(t || '').replace(/[<>"'`\\|]/g, '').trim();
     const groupMsg = () => !inGroup() ? '' : !state.group ? 'Đang tải nhóm, bạn thử lại sau giây lát nhé.'
-      : state.group.status === 'open' ? '' : state.group.status === 'ordered' ? 'Nhóm đã đặt đơn rồi, không thêm món được nữa.' : state.group.status === 'expired' ? 'Nhóm đã hết hạn.' : 'Người tạo nhóm đã khóa nhóm để đặt đơn.';
+      : state.group.status === 'open' ? '' : state.group.status === 'ordered' ? 'Nhóm đã đặt đơn rồi, không thêm món được nữa.' : state.group.status === 'expired' ? 'Nhóm đã hết hạn.' : state.group.status === 'cancelled' ? 'Đơn nhóm đã bị hủy.' : 'Người tạo nhóm đã khóa nhóm để đặt đơn.';
     const mapGroup = d => d && ({ id: d.id, title: d.title, status: d.status, isHost: !!d.is_host, hostId: d.host_id, me: d.me, expiresAt: d.expires_at, orderIds: d.order_ids || '',
       deposits: (d.deposits || []).map(x => ({ orderId: x.order_id, storeId: x.store_id, total: Number(x.total) || 0, amount: Number(x.amount) || 0, paid: x.status === 'paid' })),
       items: (d.items || []).map(i => ({ id: i.id, uid: i.user_id, person: i.person, cartKey: i.cart_key, foodId: i.food_id, storeId: i.store_id, storeName: i.store_name || '', name: i.name, desc: i.descr || '', unitPrice: Number(i.unit_price) || 0, quantity: Number(i.quantity) || 0 })) });
@@ -1434,9 +1434,28 @@
     }
     function leaveGroup(silent) {
       if (!silent && !confirm('Rời khỏi nhóm này? Món bạn đã chọn vẫn ở lại trong nhóm, bạn có thể vào lại bằng link.')) return;
-      state.groupId = ''; state.group = null; state.groupView = false; state.groupQR = false; state.groupCheckout = false; state.groupAsk = null; state.needMine = false; lsSet(GKEY.id, ''); lsSet(GKEY.co, '');
+      state.groupId = ''; state.group = null; state.groupView = false; state.groupQR = false; state.groupCheckout = false; state.groupAsk = null; state.needMine = false; lsSet(GKEY.id, ''); lsSet(GKEY.co, ''); lsSet(GKEY.temp, '');
       try { const solo = JSON.parse(lsGet(GKEY.solo, '[]')); state.cart = Array.isArray(solo) ? solo : []; } catch { state.cart = []; }
       lsSet(GKEY.solo, ''); saveState(); render();
+    }
+    // Hủy đơn nhóm (chỉ người tạo): đóng nhóm cho mọi người. Đã gửi đơn và đặt cọc thì không hủy ở đây được.
+    async function cancelGroup(silent) {
+      const g = state.group; if (!g || !g.isHost) return;
+      if (!silent && !confirm('Hủy đơn nhóm "' + g.title + '"? Nhóm sẽ bị đóng cho mọi người và các món đã chọn không còn dùng được.')) return;
+      if (supabaseClient) { const r = await supabaseClient.rpc('group_cancel', { p_group: g.id }); if (r.error) return showToast(groupNoSql(r.error) ? 'Chủ app cần chạy lại file group-deposit-setup.sql để dùng nút Hủy đơn nhóm.' : r.error.message); }
+      lsSet(GKEY.temp, ''); leaveGroup(true); if (!silent) showToast('Đã hủy đơn nhóm.');
+    }
+    // Người chưa đăng ký tài khoản: nhóm chỉ sống trong phiên này, đóng app/trình duyệt rồi mở lại thì nhóm tự hủy. Chỉ nhóm của tài khoản đã đăng ký mới được giữ lại.
+    const isRegistered = () => !!(state.user && state.user.email);
+    function groupTempCheck() {
+      const tmp = lsGet(GKEY.temp, ''); let alive = false;
+      try { alive = !!sessionStorage.getItem('fg_alive'); sessionStorage.setItem('fg_alive', '1'); } catch { alive = true; }
+      if (!tmp || alive || tmp !== state.groupId) return false;
+      state.group = null; lsSet(GKEY.temp, '');
+      const gid = tmp, done = () => leaveGroup(true);
+      if (!supabaseClient) { done(); return true; }
+      supabaseClient.auth.getSession().then(() => supabaseClient.rpc('group_cancel', { p_group: gid })).then(() => {}, () => {}).then(() => { if (state.groupId === gid) done(); showToast('Đơn nhóm tạm đã tự hủy vì bạn chưa đăng nhập. Đăng ký tài khoản để giữ đơn nhóm.'); });
+      return true;
     }
     function openGroupAsk() { state.groupAsk = { mode: 'create', name: gName(), title: '' }; render(); }
     async function groupAskSubmit() {
@@ -1447,7 +1466,8 @@
       if (!supabaseClient || !(await ensureSession())) return showToast('Chưa kết nối được máy chủ. Hãy bật "Allow anonymous sign-ins" trong Supabase.');
       const r = await supabaseClient.rpc('group_create', { p_title: gSafe(a.title).slice(0, 60) || 'Đơn nhóm' });
       if (r.error) { if (groupNoSql(r.error)) state.groupReady = false; render(); return showToast(groupNoSql(r.error) ? 'Tính năng đơn nhóm chưa được bật. Chủ app cần chạy file group-order-setup.sql.' : r.error.message); }
-      state.groupAsk = null; await joinGroup(r.data, state.cart.length > 0); showToast('Đã tạo nhóm. Hãy chia sẻ link cho mọi người nhé!');
+      state.groupAsk = null; await joinGroup(r.data, state.cart.length > 0); lsSet(GKEY.temp, isRegistered() ? '' : r.data);
+      showToast(isRegistered() ? 'Đã tạo nhóm. Hãy chia sẻ link cho mọi người nhé!' : 'Đã tạo nhóm tạm. Đăng ký tài khoản để giữ nhóm; nếu không, nhóm tự hủy khi bạn đóng app.');
     }
     async function shareGroup() {
       const g = state.group; if (!g || !g.isHost) return; const url = groupLink(g.id), text = (gName() || 'Mình') + ' mời bạn chọn món cho "' + g.title + '" trên ShopFood';
@@ -1542,7 +1562,7 @@
       const banner = paying ? (allPaid ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">✅ Các quán đã nhận tiền cọc. ${g.isHost ? 'Bạn bấm “Hoàn thành đơn” bên dưới nhé.' : 'Chờ trưởng nhóm hoàn thành đơn.'}</p>` : `<p class="bg-amber-50 text-amber-900 rounded-xl px-3 py-2 text-[13px] font-semibold">💰 Đơn đã gửi tới quán. ${g.isHost ? 'Hãy chuyển khoản đặt cọc 30% theo mã QR bên dưới, quán xác nhận xong là bạn hoàn thành được đơn.' : 'Trưởng nhóm đang đặt cọc 30% cho các quán.'}</p>`) : open ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">● Nhóm đang mở, ai có link cũng chọn món được. Còn khoảng ${hrs} giờ.</p>`
         : g.status === 'locked' ? `<p class="bg-amber-50 text-amber-900 rounded-xl px-3 py-2 text-[13px] font-semibold">🔒 Nhóm đã khóa, ${g.isHost ? 'bạn đang chuẩn bị đặt đơn.' : 'người tạo nhóm đang chuẩn bị đặt đơn.'}</p>`
         : g.status === 'ordered' ? `<p class="bg-green-50 text-green-800 rounded-xl px-3 py-2 text-[13px] font-semibold">✅ Nhóm đã đặt đơn thành công. Các quán sẽ xác nhận và giao.${dep.length ? '<br>Đã cọc ' + money(dep.reduce((a, d) => a + d.amount, 0)) + ', còn lại ' + money(dep.reduce((a, d) => a + d.total - d.amount, 0)) + ' trả khi nhận hàng.' : ''}${g.orderIds ? '<br>Mã đơn: ' + escQ(g.orderIds) : ''}</p>`
-        : `<p class="bg-gray-100 text-gray-600 rounded-xl px-3 py-2 text-[13px] font-semibold">Nhóm đã hết hạn.</p>`;
+        : `<p class="bg-gray-100 text-gray-600 rounded-xl px-3 py-2 text-[13px] font-semibold">${g.status === 'cancelled' ? 'Người tạo đã hủy đơn nhóm này.' : 'Nhóm đã hết hạn.'}</p>`;
       const person = uid => { const rows = all.filter(i => i.uid === uid), isMe = uid === me, nm = rows[0].person, sub = rows.reduce((a, i) => a + i.unitPrice * i.quantity, 0);
         return `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm"><div class="flex items-center justify-between gap-2"><b class="text-[15px] text-gray-900 truncate">👤 ${escQ(nm)}${isMe ? ' <span class="text-gac">(Bạn)</span>' : ''}${uid === g.hostId ? ' <span class="text-[13px] font-bold text-emerald-700">Người tạo</span>' : ''}</b><b class="text-gac text-[14px] shrink-0">${money(sub)}</b></div>
           ${isMe && open ? `<button onclick="state.groupAsk={mode:'join', name:gName(), title:''}; render();" class="text-[13px] text-emerald-700 font-bold -mt-1">Đổi tên</button>` : ''}
@@ -1551,7 +1571,7 @@
               : `<b class="shrink-0 text-gray-700">× ${i.quantity}</b>${g.isHost && open && !i.mine ? `<button onclick="groupRemove('${i.id}')" class="shrink-0 text-rose-600 font-bold px-1" aria-label="Xóa món">✕</button>` : ''}`}</div>`).join('')}</div>`; };
       const foot = open ? `<div class="flex gap-2">${back.replace('h-10 px-3 rounded-full bg-white/15 text-white', 'flex-1 py-3 rounded-xl bg-white border border-emerald-700 text-emerald-800 font-extrabold').replace('‹ Thêm món', '＋ Thêm món')}${g.isHost ? `<button onclick="groupCheckoutStart()" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">🔒 Chốt và đặt đơn</button>` : ''}</div>${g.isHost ? '' : '<p class="text-[13px] text-gray-500 text-center">Khi mọi người chọn xong, người tạo nhóm sẽ bấm chốt để đặt đơn.</p>'}`
         : paying && g.isHost ? `<button onclick="groupFinishNow()" ${allPaid ? '' : 'disabled'} class="w-full py-3.5 rounded-xl text-[15px] font-extrabold ${allPaid ? 'bg-emerald-700 text-white shadow-lg' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}">${allPaid ? '✅ Hoàn thành đơn · còn lại ' + money(dep.reduce((a, d) => a + d.total - d.amount, 0)) : 'Hoàn thành đơn (chờ quán xác nhận cọc ' + dep.filter(d => d.paid).length + '/' + dep.length + ')'}</button><p class="text-[13px] text-center ${allPaid ? 'text-emerald-800 font-semibold' : 'text-gray-500'}">${allPaid ? 'Đã cọc ' + money(dep.reduce((a, d) => a + d.amount, 0)) + '. Số tiền còn lại trả cho quán khi nhận hàng.' : 'Nút sáng lên khi quán bấm xác nhận đã nhận tiền cọc.'}</p>` : paying ? '' : g.status === 'locked' && g.isHost ? `<div class="flex gap-2"><button onclick="groupSetStatus('open')" class="flex-1 py-3 rounded-xl bg-white border border-emerald-700 text-emerald-800 text-[14px] font-extrabold">Mở lại để sửa</button><button onclick="groupCheckoutStart()" class="flex-1 py-3 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">Đặt đơn</button></div>` : '';
-      return `<div class="fixed inset-0 z-50 bg-[#F6F3EF] max-w-md mx-auto flex flex-col"><div class="bg-bark text-white px-4 pt-3 pb-3 space-y-2 shrink-0"><div class="flex items-center justify-between gap-2">${back}<button onclick="leaveGroup()" class="text-[13px] text-white/70 font-bold px-2">Rời nhóm</button></div>
+      return `<div class="fixed inset-0 z-50 bg-[#F6F3EF] max-w-md mx-auto flex flex-col"><div class="bg-bark text-white px-4 pt-3 pb-3 space-y-2 shrink-0"><div class="flex items-center justify-between gap-2">${back}${g.isHost && !(g.deposits || []).length && g.status !== 'ordered' ? `<button onclick="cancelGroup()" class="text-[13px] text-white/80 font-bold px-2">Hủy đơn nhóm</button>` : g.isHost && (g.deposits || []).length && g.status !== 'ordered' ? '' : `<button onclick="leaveGroup()" class="text-[13px] text-white/70 font-bold px-2">Rời nhóm</button>`}</div>
           <h2 class="font-display text-[22px] leading-tight font-bold">${escQ(g.title)}</h2><p class="text-[13px] text-white/75">${new Set(all.map(i => i.uid)).size} người · ${stores.size} quán · ${qty} phần</p></div>
         <div data-scroll="gv" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">${banner}
           ${paying ? groupPayHtml(g) : ''}
@@ -2574,9 +2594,10 @@
     render();
     loadCloudData();
     setupRealtimeSync(); setupTableRealtime(); applyHash(); window.addEventListener('hashchange', applyHash); registerSW();
-    if (state.groupId && !/nhom=/.test(location.hash)) loadGroup();
+    const tempGone = groupTempCheck();
+    if (state.groupId && !/nhom=/.test(location.hash) && !tempGone) loadGroup();
     if (supabaseClient) supabaseClient.auth.onAuthStateChange((_e, session) => {
-      const prevUid = state.user && state.user.id; state.user = session && session.user ? { id: session.user.id, email: session.user.email } : null; if (state.user && state.user.id !== prevUid) setTimeout(loadProfile, 0);
+      const prevUid = state.user && state.user.id; state.user = session && session.user ? { id: session.user.id, email: session.user.email } : null; if (state.user && state.user.email) lsSet(GKEY.temp, ''); if (state.user && state.user.id !== prevUid) setTimeout(loadProfile, 0);
       if (!state.user) state.manageStoreId = '', state.profile = { ...state.profile, myStoreId: '', name: '', phone: '', address: '' }, state.checkoutName = state.checkoutPhone = state.checkoutAddress = '';
       setTimeout(() => { loadCloudData(); loadBilling(); loadStats(); }, 0); render();
     });
