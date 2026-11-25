@@ -1360,11 +1360,12 @@
       state.groupAsk = null; await joinGroup(r.data, state.cart.length > 0); showToast('Đã tạo nhóm. Hãy chia sẻ link cho mọi người nhé!');
     }
     async function shareGroup() {
-      const g = state.group; if (!g) return; const url = groupLink(g.id), text = (gName() || 'Mình') + ' mời bạn chọn món cho "' + g.title + '" trên ShopFood';
+      const g = state.group; if (!g || !g.isHost) return; const url = groupLink(g.id), text = (gName() || 'Mình') + ' mời bạn chọn món cho "' + g.title + '" trên ShopFood';
       if (navigator.share) { try { await navigator.share({ title: g.title, text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
       copyGroupLink();
     }
     function copyGroupLink() {
+      if (!state.group || !state.group.isHost) return;   // chỉ trưởng nhóm được chia sẻ link
       const url = groupLink(state.groupId);
       try { navigator.clipboard.writeText(url).then(() => showToast('Đã sao chép link nhóm. Dán vào Zalo gửi cho mọi người nhé!'), () => showToast(url)); } catch { showToast(url); }
     }
@@ -1425,7 +1426,7 @@
         <div class="flex gap-2"><button onclick="${join && !state.group ? 'leaveGroup(true)' : 'state.groupAsk=null; render();'}" class="px-4 py-3 border rounded-xl text-[14px] font-bold">${join ? 'Để sau' : 'Hủy'}</button><button onclick="groupAskSubmit()" class="flex-1 py-3 bg-emerald-700 text-white rounded-xl text-[14px] font-extrabold">${join ? 'Vào nhóm' : 'Tạo nhóm'}</button></div></div></div>`;
     }
     function groupQrHtml() {
-      const g = state.group; if (!g) return '';
+      const g = state.group; if (!g || !g.isHost) return '';
       return `<div class="fixed inset-0 z-[60] bg-black/60 flex items-end justify-center" onclick="state.groupQR=false; render();"><div class="bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3 shadow-2xl" onclick="event.stopPropagation()">
         <div class="flex items-center justify-between"><h3 class="font-extrabold text-[16px]">Mã QR của nhóm</h3><button onclick="state.groupQR=false; render();" class="w-9 h-9 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
         <div class="text-center space-y-1.5"><img src="${qrImg(groupLink(g.id), 280)}" class="w-56 h-56 mx-auto border rounded-2xl p-1 bg-white" /><p class="font-extrabold text-[16px]">${escQ(g.title)}</p><p class="text-[13px] text-gray-500">Bạn bè quét mã này là vào đúng nhóm để chọn món.</p></div></div></div>`;
@@ -1454,8 +1455,8 @@
       return `<div class="fixed inset-0 z-50 bg-[#F6F3EF] max-w-md mx-auto flex flex-col"><div class="bg-bark text-white px-4 pt-3 pb-3 space-y-2 shrink-0"><div class="flex items-center justify-between gap-2">${back}<button onclick="leaveGroup()" class="text-[13px] text-white/70 font-bold px-2">Rời nhóm</button></div>
           <h2 class="font-display text-[22px] leading-tight font-bold">${escQ(g.title)}</h2><p class="text-[13px] text-white/75">${new Set(all.map(i => i.uid)).size} người · ${stores.size} quán · ${qty} phần</p></div>
         <div data-scroll="gv" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">${banner}
-          ${open || g.status === 'locked' ? `<div class="flex gap-2"><button onclick="shareGroup()" class="flex-1 py-2.5 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">📤 Chia sẻ</button><button onclick="state.groupQR=true; render();" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">▦ Mã QR</button><button onclick="copyGroupLink()" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">🔗 Chép link</button></div>` : ''}
-          ${order.length ? order.map(person).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center text-[14px] text-gray-500">Chưa có ai chọn món. Bấm “Thêm món” để bắt đầu, rồi chia sẻ link cho bạn bè.</div>'}
+          ${g.isHost && (open || g.status === 'locked') ? `<div class="flex gap-2"><button onclick="shareGroup()" class="flex-1 py-2.5 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold">📤 Chia sẻ</button><button onclick="state.groupQR=true; render();" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">▦ Mã QR</button><button onclick="copyGroupLink()" class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-[14px] font-bold">🔗 Chép link</button></div>` : ''}
+          ${order.length ? order.map(person).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-6 text-center text-[14px] text-gray-500">Chưa có ai chọn món. Bấm “Thêm món” để bắt đầu' + (g.isHost ? ', rồi chia sẻ link cho bạn bè' : '') + '.</div>'}
           ${stores.size ? `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-1.5 shadow-sm"><b class="text-[14px]">Theo từng quán</b>${[...stores.values()].map(s => `<div class="flex justify-between text-[13px]"><span>🏪 ${escQ(s.name)} · ${s.q} phần</span><b>${money(s.t)}</b></div>`).join('')}<p class="text-[13px] text-gray-400 pt-1">Mỗi quán nhận một đơn riêng, giao chung tới một địa chỉ. Phí giao (nếu có) do quán tính thêm.</p></div>` : ''}
           <div class="flex justify-between items-center bg-white rounded-2xl border border-gray-100 p-3 shadow-sm"><span class="font-extrabold text-[15px]">Tổng tiền món</span><b class="text-gac text-[18px]">${money(total)}</b></div></div>
         ${foot ? `<div class="shrink-0 bg-white border-t p-3 space-y-2">${foot}</div>` : ''}</div>`;
