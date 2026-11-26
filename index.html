@@ -1190,7 +1190,7 @@
       if (!open) return `<div class="space-y-2">${toggle}</div>`;
       if (state.promoReady === false) return `<div class="space-y-2">${toggle}<div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 space-y-2 text-[13px] text-amber-900"><b>Chưa cài phần quảng bá trong Supabase.</b><p>Vào Supabase, mở SQL Editor, dán toàn bộ file <b>promo-setup.sql</b> rồi bấm Run. Xong quay lại đây bấm nút dưới.</p><button onclick="refreshPromos()" class="bg-emerald-700 text-white px-4 h-10 rounded-xl font-extrabold">Kiểm tra lại</button></div></div>`;
       return `<div class="space-y-2.5">${toggle}
-        <p class="text-[13px] text-gray-500 px-1">Quán mua vị trí sẽ hiện nhãn "Tài trợ" trên trang chủ. Mỗi gói tự động đếm lượt xem, lượt bấm và đơn đặt để bạn gửi báo cáo cho chủ quán.</p>
+        <p class="text-[13px] text-gray-500 px-1">Quán mua vị trí sẽ được ưu tiên hiện trên trang chủ. Mỗi gói tự động đếm lượt xem, lượt bấm và đơn đặt để bạn gửi báo cáo cho chủ quán.</p>
         ${promoFormHtml()}
         ${rep.length ? rep.map(r => promoCardHtml(r, true)).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có gói nào. Hãy tạo gói dùng thử cho một quán để lấy số liệu đầu tiên.</div>'}</div>`;
     }
@@ -1270,14 +1270,13 @@
           <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
           <span class="ad-shine"></span>
-          <span class="absolute top-2.5 left-2.5 bg-white/90 text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">Tài trợ</span>
           <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[18px] leading-tight text-white line-clamp-1">${escQ(f.name)}</b><p class="font-extrabold text-[16px]" style="color:${t.c2}">${priceText(f)}</p></div>
           <div class="absolute right-2.5 bottom-2.5 z-10">${plusHtml(f.id, true)}</div></div></div></div>`;
       }
       return `<div data-feat class="snap-start shrink-0 w-[68%] max-w-[270px]"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative h-[172px] rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
         <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
-        ${f._ad ? '<span class="absolute top-2.5 left-2.5 bg-white/90 text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">Tài trợ</span>' : `<span class="absolute top-2.5 left-2.5 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">${badge}</span>`}
+        ${f._ad ? '' : `<span class="absolute top-2.5 left-2.5 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">${badge}</span>`}
         <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[18px] leading-tight text-white line-clamp-1">${escQ(f.name)}</b><p class="text-nghe font-extrabold text-[16px]">${priceText(f)}</p></div>
         <div class="absolute right-2.5 bottom-2.5 z-10">${plusHtml(f.id, true)}</div></div></div>`;
     }
