@@ -194,7 +194,7 @@
       pickupTime: '11:30',
       showOrderDetail: null,
       showStoreForm: false,
-      newStoreForm: { name: '', category: 'Đặc sản địa phương', address: '', phone: '', image: '' },
+      newStoreForm: { name: '', category: 'Đặc sản địa phương', address: '', phone: '', image: '', pass: '' },
       showFoodForm: false,
       foodForm: { name: '', priceInput: '', category: 'Món ăn', description: '', image: '', note: '', sizes: '', groups: [] },
       checkoutName: savedProfile.name,
@@ -1469,6 +1469,33 @@
     function spotGo(i) { spotPause = Date.now() + 9000; spotShow(i); }
     setInterval(() => { if (document.hidden || Date.now() < spotPause || spotN < 2 || !document.querySelector('[data-spot]') || state.activeTab !== 'orders') return; spotShow((spotIdx + 1) % spotN); }, 4500);
     document.addEventListener('touchstart', e => { if (e.target && e.target.closest && e.target.closest('[data-spot]')) spotPause = Date.now() + 9000; }, { capture: true, passive: true });
+    // Màn "chưa có cửa hàng": cho chủ quán thấy nỗi đau khi bán không app và cái được khi có app
+    function noStoreHtml() {
+      const pains = [
+        ['📞', 'Khách gọi đúng lúc bạn bận tay, không nghe máy được', 'Khách tự chọn món và đặt trên app, đơn nằm đó chờ bạn'],
+        ['🗣️', 'Nghe được nhưng ghi nhầm món, thiếu topping, sai size', 'Đơn hiện đủ món, size, topping, ghi chú, địa chỉ, số điện thoại'],
+        ['🌙', 'Khuya khách gọi, quán đã nghỉ, khách bỏ đi quán khác', 'Trang quán luôn mở như tờ thực đơn, khách xem món và giá bất cứ lúc nào'],
+        ['🙅', 'Hết món vẫn bị gọi hỏi, phải giải thích từng người', 'Bấm một lần tắt món, khách không còn đặt được món đó'],
+        ['🍜', 'Món ngon, nấu tâm huyết mà không ai biết tới nên ế', 'Quán hiện cho khách quanh Trà Bồng, có link và mã QR để dán ở quán']
+      ];
+      const zalo = PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="block text-center text-[13px] font-bold text-bark underline">Chưa rõ cách làm? Nhắn Zalo ${escQ(PLATFORM_ZALO)} để được hướng dẫn</a>` : '';
+      return `<div class="space-y-4">
+        <div class="rounded-3xl p-5 text-white shadow-md" style="background:linear-gradient(135deg,#3b1d12,#7a3317)">
+          <b class="block font-display text-[22px] leading-snug">Quán ngon mà vắng khách, lỗi đâu phải ở món?</b>
+          <p class="text-[14px] text-white/85 mt-2 leading-relaxed">Tạo quán trên ShopFood chỉ 30 giây. Dù bạn bán gì, khách quanh đây cũng tìm thấy và đặt được.</p>
+        </div>
+        <div class="space-y-2.5">
+          <h3 class="font-extrabold text-[15px]">Bán không có app, bạn đang chịu những chuyện này</h3>
+          ${pains.map(p => `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="flex gap-3 items-start p-3 bg-red-50"><span class="text-xl leading-none">${p[0]}</span><span class="text-[14px] text-red-900 font-semibold leading-snug">${p[1]}</span></div>
+            <div class="flex gap-3 items-start p-3"><span class="text-xl leading-none">✅</span><span class="text-[14px] text-gray-800 leading-snug"><b class="text-emerald-700">Có ShopFood:</b> ${p[2]}</span></div></div>`).join('')}
+        </div>
+        <div class="rounded-2xl bg-amber-50 border border-amber-300 p-4 text-center space-y-3">
+          <b class="block text-[15px] text-bark">Mỗi ngày chưa có app là thêm vài đơn trôi mất</b>
+          <button onclick="state.showStoreForm=true; render();" class="w-full bg-amber-400 text-bark px-5 py-3.5 rounded-xl text-[15px] font-black shadow-md">✨ Tạo cửa hàng của tôi ngay</button>
+          <span class="block text-[13px] text-gray-500">Chỉ cần tên quán, số điện thoại và vài món đầu tiên</span>
+        </div>${zalo}</div>`;
+    }
     function ordersExtrasHtml() {
       if (!state.stores.length) return '';
       const row = list => `<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">${list.join('')}</div>`, h = (t, sub) => `<div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[15px]">${t}</h3>${sub ? `<span class="text-[13px] text-gray-400">${sub}</span>` : ''}</div>`;
@@ -2264,10 +2291,32 @@
       showToast(ids.length > 1 ? `Đã gửi ${ids.length} đơn tới ${ids.length} quán!` : `Đã gửi đơn hàng ${ids[0]} thành công!`);
     }
 
-    function createNewStore(e) {
+    async function createNewStore(e) {
       e.preventDefault();
-      const name = state.newStoreForm.name.trim();
+      if (state.creatingStore) return;
+      const F = state.newStoreForm, name = F.name.trim();
       if (!name) { showToast('Vui lòng nhập tên quán.'); return; }
+      // Chưa có tài khoản: dùng chính số điện thoại + mật khẩu vừa nhập để tạo tài khoản, rồi tạo quán luôn
+      if (supabaseClient && !hasAccount()) {
+        const phone = normPhone(F.phone);
+        if (!/^0\d{9,10}$/.test(phone)) { showToast('Số điện thoại chưa đúng. Ví dụ: 0912345678'); return; }
+        if ((F.pass || '').length < 6) { showToast('Mật khẩu cần từ 6 ký tự trở lên.'); return; }
+        if (!AUTH_MAILBOX) { showToast('Chủ app chưa cài đặt đăng nhập bằng số điện thoại.'); return; }
+        state.creatingStore = true;
+        const { data, error } = await supabaseClient.auth.signUp({ email: phoneEmail(phone), password: F.pass });
+        state.creatingStore = false;
+        const dup = data && data.user && data.user.identities && data.user.identities.length === 0;
+        if (error || dup || !data.session) {
+          const m = (error && error.message) || '';
+          showToast(dup || /already registered/i.test(m) ? 'Số điện thoại này đã có tài khoản. Bấm "Đã có tài khoản? Đăng nhập" bên dưới.'
+            : /rate limit|too many/i.test(m) ? 'Hệ thống đang giới hạn số lần đăng ký. Hãy thử lại sau ít phút.'
+            : /disabled/i.test(m) ? 'Supabase đang tắt đăng ký tài khoản mới. Chủ app cần bật "Allow new users to sign up".'
+            : !error ? 'Supabase đang yêu cầu xác nhận email. Chủ app cần tắt "Confirm email".' : 'Lỗi: ' + m);
+          return;
+        }
+        state.user = { id: data.session.user.id, email: data.session.user.email };
+        state.profile.phone = phone; F.pass = '';
+      }
 
       const newId = 's_' + Date.now();
       const newStore = {
@@ -2278,13 +2327,13 @@
         areaId: state.selectedAreaId,
         image: state.newStoreForm.image || 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=700&q=80',
         isOpen: true,
-        phone: state.newStoreForm.phone.trim() || state.profile.phone || '0900000000'
+        phone: F.phone.trim() || state.profile.phone || '0900000000'
       };
 
       state.stores.push(newStore);
       state.profile.myStoreId = newId;
       state.showStoreForm = false;
-      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', address: '', phone: '', image: '' };
+      state.newStoreForm = { name: '', category: 'Đặc sản địa phương', address: '', phone: '', image: '', pass: '' };
       saveState();
 
       // LƯU CỬA HÀNG LÊN SUPABASE CLOUD
@@ -2293,11 +2342,11 @@
           id: newStore.id, name: newStore.name, category: newStore.category,
           address: newStore.address, area_id: newStore.areaId, image: newStore.image,
           is_open: newStore.isOpen, phone: newStore.phone
-        }]).then(({ error }) => { if (error) console.error('Lỗi lưu quán Cloud:', error); });
+        }]).then(({ error }) => { if (error) { console.error('Lỗi lưu quán Cloud:', error); showToast('Chưa lưu được quán lên máy chủ. Hãy thử lại.'); } else loadCloudData(); });
       }
 
       setTab('mystore');
-      showToast(`Đã tạo quán "${name}" thành công!`);
+      showToast(supabaseClient && state.profile.phone ? `Đã tạo quán "${name}" và tài khoản. Lần sau đăng nhập bằng số điện thoại này.` : `Đã tạo quán "${name}" thành công!`);
     }
 
     function saveFastFood() {
@@ -2527,16 +2576,7 @@
       // TAB 3: QUÁN CỦA TÔI
       if (state.activeTab === 'mystore') {
         if (!myStore) {
-          html += `
-            <div class="bg-white rounded-2xl border border-dashed border-emerald-300 p-8 text-center space-y-3">
-              <div class="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto text-xl">🏪</div>
-              <h3 class="font-extrabold text-sm text-gray-900">Bạn chưa có cửa hàng trên ShopFood</h3>
-              <p class="text-[13px] text-gray-500">Tạo gian hàng riêng của bạn chỉ với 30 giây để bắt đầu nhận đơn từ khách hàng quanh bạn.</p>
-              <button onclick="if (requireAccount()) { state.showStoreForm=true; render(); }" class="bg-amber-400 text-emerald-950 px-5 py-3 rounded-xl text-[13px] font-black shadow-md">
-                ✨ Đăng Ký Tạo Cửa Hàng Ngay
-              </button>
-            </div>
-          `;
+          html += noStoreHtml();
         } else {
           html += ownerTabHtml(myStore, myStoreFoods, myStoreOrders);
         }
@@ -2655,15 +2695,18 @@
         html += `
           <div class="fixed inset-0 z-50 bg-black/60 flex items-end sm:items-center justify-center p-4">
             <div class="bg-white w-full max-w-md rounded-2xl p-4 shadow-2xl">
-              <h3 class="font-extrabold text-base pb-2 border-b">Tạo Cửa Hàng Nhanh</h3>
-              <form onsubmit="createNewStore(event)" class="space-y-3 mt-3">
-                <label class="block space-y-1"><span class="text-[13px] font-bold">Tên quán *</span><input oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="VD: Quán Cơm Gà" /></label>
-                <label class="block space-y-1"><span class="text-[13px] font-bold">SĐT / Zalo</span><input oninput="state.newStoreForm.phone=this.value;" class="field" placeholder="09xxxxxxxx" /></label>
-                <label class="block space-y-1"><span class="text-[13px] font-bold">Địa chỉ quán</span><input oninput="state.newStoreForm.address=this.value;" class="field" placeholder="Thôn, xã..." /></label>
+              <h3 class="font-extrabold text-base pb-2 border-b">${hasAccount() || !supabaseClient ? 'Tạo cửa hàng của bạn' : 'Tạo cửa hàng và tài khoản'}</h3>
+              ${hasAccount() || !supabaseClient ? '' : '<p class="text-[13px] text-gray-500 mt-2">Điền một lần là xong. Số điện thoại và mật khẩu dưới đây cũng là tài khoản để bạn đăng nhập quản lý quán.</p>'}
+              <form onsubmit="createNewStore(event)" class="space-y-3 mt-3 max-h-[70vh] overflow-y-auto">
+                <label class="block space-y-1"><span class="text-[13px] font-bold">Tên quán *</span><input value="${attrQ(state.newStoreForm.name)}" oninput="state.newStoreForm.name=this.value;" class="field" required placeholder="VD: Quán Cơm Gà" /></label>
+                <label class="block space-y-1"><span class="text-[13px] font-bold">${hasAccount() || !supabaseClient ? 'SĐT / Zalo' : 'Số điện thoại (dùng để đăng nhập) *'}</span><input type="tel" inputmode="tel" value="${attrQ(state.newStoreForm.phone)}" oninput="state.newStoreForm.phone=this.value;" class="field" ${hasAccount() || !supabaseClient ? '' : 'required'} placeholder="09xxxxxxxx" /></label>
+                ${hasAccount() || !supabaseClient ? '' : `<label class="block space-y-1"><span class="text-[13px] font-bold">Mật khẩu (từ 6 ký tự) *</span><div class="relative"><input id="storePass" type="password" autocomplete="new-password" value="${attrQ(state.newStoreForm.pass)}" oninput="state.newStoreForm.pass=this.value;" class="field pr-16" required minlength="6" placeholder="Tự đặt, nhớ để đăng nhập sau" /><button type="button" onclick="const i=document.getElementById('storePass'); i.type = i.type==='password' ? 'text' : 'password'; this.textContent = i.type==='password' ? 'Hiện' : 'Ẩn';" class="absolute right-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-gac">Hiện</button></div></label>`}
+                <label class="block space-y-1"><span class="text-[13px] font-bold">Địa chỉ quán</span><input value="${attrQ(state.newStoreForm.address)}" oninput="state.newStoreForm.address=this.value;" class="field" placeholder="Thôn, xã..." /></label>
                 <div class="flex gap-2 pt-2">
                   <button type="button" onclick="state.showStoreForm=false; render();" class="flex-1 py-3 border rounded-xl text-[13px] font-bold">Hủy</button>
-                  <button type="submit" class="flex-1 py-3 bg-emerald-700 text-white rounded-xl text-[13px] font-extrabold">Tạo Quán Ngay</button>
+                  <button type="submit" class="flex-[1.6] py-3 bg-emerald-700 text-white rounded-xl text-[13px] font-extrabold">${hasAccount() || !supabaseClient ? 'Tạo Quán Ngay' : 'Tạo quán và tài khoản'}</button>
                 </div>
+                ${hasAccount() || !supabaseClient ? '' : `<button type="button" onclick="state.showStoreForm=false; state.authMode='login'; state.showAuth=true; render();" class="w-full text-center text-[13px] font-bold text-gac py-1">Đã có tài khoản? Đăng nhập</button>`}
               </form>
             </div>
           </div>
