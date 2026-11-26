@@ -622,9 +622,9 @@
         <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🍽️ Thực đơn <span class="text-[13px] text-gray-400 font-bold">(${foods.length})</span></h2><button onclick="state.showFoodForm=true; render();" class="bg-emerald-700 text-white px-4 rounded-xl text-[13px] font-extrabold shadow">+ Thêm món</button></div>
         ${foods.length ? `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100">${foods.map(f => `<div class="p-2.5 flex items-center gap-2.5">
           <img src="${f.image}" loading="lazy" onclick="openFoodEdit('${f.id}')" class="w-14 h-14 rounded-xl object-cover shrink-0 ${f.inStock ? '' : 'grayscale'}" />
-          <div class="flex-1 min-w-0" onclick="openFoodEdit('${f.id}')"><b class="block text-[14px] text-gray-900 line-clamp-1">${escQ(f.name)}</b><span class="text-[14px] text-gac font-extrabold">${priceText(f)}</span>${f.note ? `<span class="ml-1.5 text-[13px] text-rose-600">· ${escQ(f.note)}</span>` : ''}${featIds.has(f.id) ? '<span class="block mt-0.5"><span class="inline-block bg-bark text-nghe text-[13px] font-bold px-2 py-0.5 rounded-full">Đang hiện ở trang chủ</span></span>' : (state.weekSales && state.weekSales[f.id] ? `<span class="block text-[13px] text-gray-500">Tuần này bán ${state.weekSales[f.id]} phần</span>` : '')}</div>
-          <button onclick="toggleFoodStock('${f.id}')" class="shrink-0 h-10 px-3 rounded-xl text-[13px] font-extrabold ${f.inStock ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">${f.inStock ? 'Còn món' : 'Hết món'}</button>
-          <button onclick="openFoodEdit('${f.id}')" class="shrink-0 h-10 px-3 rounded-xl border border-emerald-600 text-emerald-700 bg-white text-[13px] font-extrabold" aria-label="Sửa món">✏️ Sửa</button></div>`).join('')}</div>`
+          <div class="flex-1 min-w-0" onclick="openFoodEdit('${f.id}')"><div class="flex items-center gap-1.5 min-w-0"><b class="min-w-0 truncate text-[14px] text-gray-900">${escQ(f.name)}</b>${f.note ? `<span class="shrink-0 max-w-[42%] truncate bg-rose-50 text-rose-600 text-[13px] font-bold px-1.5 rounded-md">${escQ(f.note)}</span>` : ''}</div><div class="flex items-center gap-1.5 min-w-0 whitespace-nowrap overflow-hidden"><span class="text-[14px] text-gac font-extrabold shrink-0">${priceText(f)}</span>${featIds.has(f.id) ? '<span class="shrink-0 bg-bark text-nghe text-[13px] font-bold px-1.5 rounded-md" title="Đang hiện ở trang chủ">🏠</span>' : ''}${state.weekSales && state.weekSales[f.id] ? `<span class="shrink-0 bg-gray-100 text-gray-600 text-[13px] font-bold px-1.5 rounded-md" title="Bán tuần này: ${state.weekSales[f.id]} phần">📈${state.weekSales[f.id]}</span>` : ''}</div></div>
+          <button onclick="toggleFoodStock('${f.id}')" class="shrink-0 h-10 px-2.5 rounded-xl text-[13px] font-extrabold ${f.inStock ? 'bg-emerald-100 text-emerald-900' : 'bg-rose-100 text-rose-900'}">${f.inStock ? 'Còn' : 'Hết'}</button>
+          <button onclick="openFoodEdit('${f.id}')" class="shrink-0 h-10 w-10 rounded-xl border border-emerald-600 text-emerald-700 bg-white text-[15px]" aria-label="Sửa món">✏️</button></div>`).join('')}</div>`
         : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có món nào. Bấm "+ Thêm món" để bắt đầu bán!</div>'}
       </section>`;
     }
@@ -1184,13 +1184,30 @@
         <label class="block space-y-1"><span class="font-bold">Ghi chú (chỉ Admin thấy)</span><input class="field" value="${attrQ(f.note)}" oninput="promoForm().note=this.value" placeholder="VD: đã thu tiền mặt" /></label>
         <button onclick="createPromo()" class="w-full bg-emerald-700 text-white py-3 rounded-xl font-extrabold">Bắt đầu quảng bá ngay</button></div>`;
     }
+    // Bảng điều khiển nhanh: thấy ngay món/quán nào đang hiện ở đâu, bấm Tắt để dừng, hoặc Bật lại 7 ngày cho gói vừa tắt
+    async function reviveSlot(id) {
+      const r = (state.promoReport || []).find(x => x.promoId === id); if (!r || !state.isAdmin) return;
+      state.promoForm = { storeId: r.storeId, slot: r.slot, foodId: r.foodId || '', days: 7, price: '', note: '' };
+      await createPromo();
+    }
+    function promoBoardHtml(rep) {
+      const area = r => { const k = slotInfo(r.slot); return k.ord ? '📋 Tab Đơn hàng' : k.kind === 'store' ? '🏪 Quán quanh bạn' : '🏠 Đầu trang chủ'; };
+      const row = (r, live) => { const k = slotInfo(r.slot), st = state.stores.find(x => x.id === r.storeId) || {}, f = r.foodId ? state.foods.find(x => x.id === r.foodId) : null, left = Math.max(1, Math.ceil((new Date(r.endsAt) - Date.now()) / 864e5));
+        return `<div class="flex items-center gap-2.5 py-2"><img src="${attrQ(f ? f.image : st.image)}" class="w-10 h-10 rounded-lg object-cover shrink-0 ${live ? '' : 'grayscale'}" /><div class="min-w-0 flex-1"><b class="block text-[14px] text-gray-900 truncate">${escQ(f ? f.name : st.name || 'Quán đã xóa')}</b><span class="block text-[13px] text-gray-500 truncate">${f ? escQ(st.name || '') + ' · ' : ''}${area(r)}${live ? ' · còn ' + left + ' ngày' : ''}</span></div>
+          <button onclick="${live ? `endPromo('${r.promoId}')` : `reviveSlot('${r.promoId}')`}" class="shrink-0 h-9 px-3 rounded-xl text-[13px] font-extrabold ${live ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-900'}">${live ? 'Tắt' : 'Bật lại 7 ngày'}</button></div>`; };
+      const live = rep.filter(promoLive), off = rep.filter(r => !promoLive(r)).slice(0, 3);
+      return `<div class="bg-white rounded-2xl border border-green-200 shadow-sm p-3 text-[13px]"><b class="block text-[14px] text-gray-900 mb-1">🟢 Đang hiển thị cho khách (${live.length})</b>
+        ${live.length ? `<div class="divide-y divide-gray-100">${live.map(r => row(r, true)).join('')}</div>` : '<p class="text-gray-500 py-2">Chưa có gì đang hiển thị. Tạo gói mới bên dưới, hoặc bật lại một gói cũ.</p>'}
+        ${off.length ? `<b class="block text-[13px] text-gray-500 mt-2 pt-2 border-t">⏸ Vừa tắt hoặc hết hạn</b><div class="divide-y divide-gray-100">${off.map(r => row(r, false)).join('')}</div>` : ''}</div>`;
+    }
     function adminPromoHtml() {
       const rep = [...(state.promoReport || [])].sort((a, b) => promoLive(b) - promoLive(a) || new Date(b.startsAt) - new Date(a.startsAt)), live = rep.filter(promoLive), open = !!state.adminPromoOpen;
-      const toggle = `<button onclick="state.adminPromoOpen = !state.adminPromoOpen; render();" class="w-full flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm text-[14px] font-extrabold text-gray-800"><span>📣 Quảng bá trên trang chủ${live.length ? ` <span class="text-green-700">● ${live.length} đang chạy</span>` : ''}</span><span class="text-gray-400 text-[13px]">${open ? '▲' : '▼'}</span></button>`;
+      const toggle = `<button onclick="state.adminPromoOpen = !state.adminPromoOpen; render();" class="w-full flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm text-[14px] font-extrabold text-gray-800"><span>📣 Quảng bá trên trang chủ${live.length ? ` <span class="text-green-700">● ${live.length} đang hiển thị</span>` : ''}</span><span class="text-gray-400 text-[13px]">${open ? '▲' : '▼'}</span></button>`;
       if (!open) return `<div class="space-y-2">${toggle}</div>`;
       if (state.promoReady === false) return `<div class="space-y-2">${toggle}<div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 space-y-2 text-[13px] text-amber-900"><b>Chưa cài phần quảng bá trong Supabase.</b><p>Vào Supabase, mở SQL Editor, dán toàn bộ file <b>promo-setup.sql</b> rồi bấm Run. Xong quay lại đây bấm nút dưới.</p><button onclick="refreshPromos()" class="bg-emerald-700 text-white px-4 h-10 rounded-xl font-extrabold">Kiểm tra lại</button></div></div>`;
       return `<div class="space-y-2.5">${toggle}
-        <p class="text-[13px] text-gray-500 px-1">Quán mua vị trí sẽ được ưu tiên hiện trên trang chủ. Mỗi gói tự động đếm lượt xem, lượt bấm và đơn đặt để bạn gửi báo cáo cho chủ quán.</p>
+        <p class="text-[13px] text-gray-500 px-1">Bấm "Tắt" để dừng hiển thị ngay, "Bật lại" để chạy lại 7 ngày. Mỗi gói tự đếm lượt xem, lượt bấm và đơn để bạn báo cáo cho chủ quán.</p>
+        ${promoBoardHtml(rep)}
         ${promoFormHtml()}
         ${rep.length ? rep.map(r => promoCardHtml(r, true)).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có gói nào. Hãy tạo gói dùng thử cho một quán để lấy số liệu đầu tiên.</div>'}</div>`;
     }
@@ -1217,7 +1234,7 @@
       if (picked.length < 4) take(order(pool.filter(f => all(f) > 0), all)); // 2) chưa đủ thì bổ sung món bán nhiều từ trước tới nay
       if (picked.length < 4) take(pool);                                // 3) vẫn chưa đủ thì lấy món mới đăng
       const sp = sponsoredFoods().slice(0, FEATURE_AD_MAX), adIds = new Set(sp.map(f => f.id));
-      return [...sp, ...picked.filter(f => !adIds.has(f.id))].slice(0, FEATURE_MAX);   // quảng bá xếp trước theo hạng, món tài trợ không xuất hiện hai lần
+      return sp.slice(0, FEATURE_MAX);   // chỉ hiện món Admin đã thêm vào gói quảng bá, không chèn món khác   // quảng bá xếp trước theo hạng, món tài trợ không xuất hiện hai lần
     }
     const featuredIds = () => new Set(computeFeatured().map(f => f.id));
     let featPauseUntil = 0;
@@ -1233,7 +1250,7 @@
       const el = document.querySelector('[data-scroll="feat"]'); if (!el) return;
       const r = el.getBoundingClientRect(); if (r.bottom < 0 || r.top > innerHeight) return;
       const st = featStep(el), n = el.querySelectorAll('[data-feat]').length; if (!st || n < 2) return;
-      const next = (Math.round(el.scrollLeft / st) + 1) % n;
+      if (n <= 2) return; const cur = Math.round(el.scrollLeft / st), next = cur >= n - 2 ? 0 : cur + 1;   // mỗi lần thấy 2 món, đi hết thì quay về đầu
       el.scrollTo({ left: next * st, behavior: 'smooth' });
     }
     setInterval(featTick, FEATURE_ROTATE_MS);
@@ -1265,19 +1282,19 @@
       const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
       const wkSold = state.weekSales ? (state.weekSales[f.id] || 0) : 0, badge = wkSold > 0 || sold > 0 ? 'Bán chạy' : 'Món mới';
       if (f._tier) {   // món quảng bá: khung theo hạng
-        const t = { c1: '#d99a00', c2: '#ffe28a', lvl: 3 }, w = 'w-[68%] max-w-[270px]';   // khách chỉ thấy một kiểu khung quảng bá duy nhất, không có hạng
+        const t = { c1: '#d99a00', c2: '#ffe28a', lvl: 3 }, w = 'w-[calc(50%-6px)]';   // khách chỉ thấy một kiểu khung quảng bá duy nhất, không có hạng
         return `<div data-feat class="snap-start shrink-0 ${w} ${adIntro() ? 'ad-in' : ''}" style="animation-delay:${(i || 0) * 120}ms"><div data-ad="${f._ad}" class="ad-frame ${t.lvl >= 3 ? 'ad-anim' : ''}" style="--c1:${t.c1};--c2:${t.c2}"><div class="relative h-[172px] rounded-[15px] overflow-hidden bg-bark-deep cursor-pointer" onclick="${go}">
           <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
           <span class="ad-shine"></span>
-          <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[18px] leading-tight text-white line-clamp-1">${escQ(f.name)}</b><p class="font-extrabold text-[16px]" style="color:${t.c2}">${priceText(f)}</p></div>
+          <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[16px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><p class="font-extrabold text-[15px]" style="color:${t.c2}">${priceText(f)}</p></div>
           <div class="absolute right-2.5 bottom-2.5 z-10">${plusHtml(f.id, true)}</div></div></div></div>`;
       }
-      return `<div data-feat class="snap-start shrink-0 w-[68%] max-w-[270px]"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative h-[172px] rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
+      return `<div data-feat class="snap-start shrink-0 w-[calc(50%-6px)]"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative h-[172px] rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
         <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
         ${f._ad ? '' : `<span class="absolute top-2.5 left-2.5 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">${badge}</span>`}
-        <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[18px] leading-tight text-white line-clamp-1">${escQ(f.name)}</b><p class="text-nghe font-extrabold text-[16px]">${priceText(f)}</p></div>
+        <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[16px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><p class="text-nghe font-extrabold text-[15px]">${priceText(f)}</p></div>
         <div class="absolute right-2.5 bottom-2.5 z-10">${plusHtml(f.id, true)}</div></div></div>`;
     }
     function foodMiniCardHtml(f) {
@@ -1510,7 +1527,7 @@
       }).join('');
       return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 id="spotTitle" class="font-extrabold text-[17px] leading-snug min-h-[46px] flex items-center">${paid ? '😋 ' + escQ(t0) : '🔥 Món bán chạy hôm nay'}</h3></div>
         <div data-spot class="relative h-[248px] rounded-3xl overflow-hidden bg-bark-deep shadow-lg">${slides}</div>
-        ${items.length > 1 ? `<div class="flex justify-center gap-2">${items.map((_, i) => `<button onclick="spotGo(${i})" aria-label="Món ${i + 1}" data-spdot="${i}" class="h-2 rounded-full transition-all ${i === spotIdx ? 'w-6 bg-gac' : 'w-2 bg-gray-300'}"></button>`).join('')}</div>` : ''}</div>`;
+        </div>`;
     }
     function spotShow(i) {
       spotIdx = i; const tt = document.getElementById('spotTitle'); if (tt && spotTitles[i]) tt.textContent = '😋 ' + spotTitles[i];
@@ -1523,12 +1540,10 @@
     // Màn "chưa có cửa hàng": cho chủ quán thấy nỗi đau khi bán không app và cái được khi có app
     function noStoreHtml() {
       const rows = [
-        ['📞', 'Lỡ cuộc gọi của khách', 'Khách tự đặt, đơn chờ sẵn'],
-        ['🗣️', 'Nghe nhầm món, topping', 'Đơn ghi đủ, không sai'],
-        ['🌙', 'Khuya quán nghỉ, khách bỏ đi', 'Thực đơn mở cả đêm'],
-        ['🙅', 'Hết món vẫn bị hỏi', 'Tắt món một chạm'],
-        ['🍜', 'Món ngon không ai biết', 'Khách quanh đây thấy quán'],
-        ['💸', 'Khách bỏ đơn, cộng sổ mệt', 'Cọc bằng QR, đơn tự lưu']
+        ['📞', 'Lỡ cuộc gọi, nghe nhầm món', 'Đơn ghi đủ món, topping, ghi chú'],
+        ['🙅', 'Hết món vẫn bị hỏi', 'Bật tắt món một chạm'],
+        ['🪑', 'Khách ngồi quán phải vẫy gọi', 'Mỗi bàn một mã QR, khách tự gọi món'],
+        ['🍜', 'Món ngon không ai biết', 'Khách quanh đây thấy quán']
       ];
       const go = 'state.showStoreForm=true; render();';
       const zalo = PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="block text-center text-[13px] text-gray-500 underline">Cần hướng dẫn? Nhắn Zalo ${escQ(PLATFORM_ZALO)}</a>` : '';
@@ -1542,8 +1557,7 @@
           <div class="grid grid-cols-2 text-center text-[13px] font-extrabold"><div class="bg-red-50 text-red-900 py-2">😣 Không có app</div><div class="bg-green-50 text-green-900 py-2">😊 Có ShopFood</div></div>
           ${rows.map(r => `<div class="grid grid-cols-2 border-t border-gray-100 text-[14px] leading-snug"><div class="flex gap-2 items-center px-3 py-3 text-red-900"><span class="text-lg">${r[0]}</span><span>${r[1]}</span></div><div class="flex items-center px-3 py-3 font-bold text-green-900 bg-green-50/50">${r[2]}</div></div>`).join('')}
         </div>
-        <button onclick="${go}" class="w-full bg-amber-400 text-bark py-3.5 rounded-xl text-[16px] font-black shadow-md">Tạo cửa hàng của tôi</button>
-        <p class="text-center text-[13px] text-gray-500 -mt-1.5">Chỉ cần tên quán, số điện thoại và vài món.</p>${zalo}</div>`;
+        <p class="text-center text-[13px] text-gray-500">Chỉ cần tên quán, số điện thoại và vài món.</p>${zalo}</div>`;
     }
     function ordersExtrasHtml() {
       if (!state.stores.length) return '';
@@ -1992,7 +2006,7 @@
       state.showCart = true; render();
     }
     function homeTopHtml(featured) {
-      const area = (ADMINISTRATIVE_LOCATIONS[0] || {}).district || '', show = featured.length > 0 || !state.searchQuery && state.selectedCategory === 'Tất cả';
+      const area = (ADMINISTRATIVE_LOCATIONS[0] || {}).district || '', loading = !state.cloudLoaded && !state.foods.length, show = featured.length > 0 || (!state.searchQuery && state.selectedCategory === 'Tất cả' && loading);
       const header = `<header class="sticky top-0 z-30 bg-bark text-white ${show ? '' : 'rounded-b-3xl shadow-lg'}"><div class="px-4 pt-3 pb-3 space-y-2.5">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-baseline gap-2 min-w-0"><span class="font-display text-[25px] font-bold text-nghe leading-none">ShopFood</span>${area ? `<span class="text-[13px] text-white/65 truncate">${escQ(area)}</span>` : ''}</div>
@@ -2008,9 +2022,10 @@
           ${state.isListening ? '<p class="text-[13px] text-nghe font-bold text-center">Đang nghe... hãy nói tên món bạn muốn (bấm micro để dừng)</p>' : ''}
         </div></header>`;
       if (state.searchQuery || state.selectedCategory !== 'Tất cả') return header;
-      const skeleton = !state.cloudLoaded && !state.foods.length ? '<div class="flex gap-3 px-4 overflow-hidden"><div class="shrink-0 w-[68%] h-[172px] rounded-2xl bg-white/10 animate-pulse"></div><div class="shrink-0 w-[68%] h-[172px] rounded-2xl bg-white/10 animate-pulse"></div></div>' : '';
+      if (!show) return header;
+      const skeleton = loading ? '<div class="flex gap-3 px-4 overflow-hidden"><div class="shrink-0 w-[calc(50%-6px)] h-[172px] rounded-2xl bg-white/10 animate-pulse"></div><div class="shrink-0 w-[calc(50%-6px)] h-[172px] rounded-2xl bg-white/10 animate-pulse"></div></div>' : '';
       return header + `<section class="bg-gradient-to-b from-bark to-bark-deep text-white rounded-b-[24px] pb-4">
-        <div class="px-4 pt-0.5 flex items-center justify-between gap-2"><h2 class="font-display text-[22px] leading-tight font-bold">Hôm nay ăn gì nhỉ?</h2>${featured.length > 1 ? `<div class="flex items-center gap-1.5" aria-hidden="true">${featured.map((f, i) => `<span data-dot="${i}" class="h-1.5 rounded-full transition-all ${i === 0 ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'}"></span>`).join('')}</div>` : ''}</div>
+        <div class="px-4 pt-0.5 flex items-center justify-between gap-2"><h2 class="font-display text-[22px] leading-tight font-bold">Hôm nay ăn gì nhỉ?</h2>${featured.length > 2 ? `<div class="flex items-center gap-1.5" aria-hidden="true">${featured.map((f, i) => `<span data-dot="${i}" class="h-1.5 rounded-full transition-all ${i === 0 ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'}"></span>`).join('')}</div>` : ''}</div>
         <p class="px-4 mt-0.5 text-[13px] text-white/75">Chọn món, nhập số điện thoại và địa chỉ là xong.</p>
         ${featured.length ? `<div data-scroll="feat" class="mt-2.5 flex gap-3 overflow-x-auto no-scrollbar snap-x snap-mandatory px-4 scroll-px-4">${featured.map(featCardHtml).join('')}<div class="shrink-0 w-1"></div></div>` : skeleton}
       </section>`;
@@ -2587,11 +2602,11 @@
         const topIds = new Set(featured.map(f => f.id));
         newIds = new Set(browsing ? visibleFoods.filter(f => foodOk(f) && !topIds.has(f.id)).slice(0, 6).map(f => f.id) : []);
         const fresh = visibleFoods.filter(f => newIds.has(f.id));
-        const showFresh = fresh.length >= 3 && featured.length > 0, freshIds = new Set(showFresh ? fresh.map(f => f.id) : []);
+        const showFresh = false, freshIds = new Set(showFresh ? fresh.map(f => f.id) : []);
         const rest = browsing ? ranked.filter(f => !topIds.has(f.id) && !freshIds.has(f.id)) : ranked;
         const shops = orderedShops();
         const h3 = 'font-display text-[21px] leading-tight font-bold text-bark';
-        const gridTitle = state.searchQuery ? (matchedStores.length ? 'Món (' + visibleFoods.length + ')' : 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)') : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : (featured.length ? 'Tất cả món ngon' : 'Món nổi bật');
+        const gridTitle = state.searchQuery ? (matchedStores.length ? 'Món (' + visibleFoods.length + ')' : 'Kết quả cho "' + escQ(state.searchQuery) + '" (' + visibleFoods.length + ' món)') : state.selectedCategory !== 'Tất cả' ? state.selectedCategory + ' được chọn nhiều' : '';
         const skel = '<div class="bg-white rounded-2xl border border-black/5 overflow-hidden animate-pulse"><div class="h-36 bg-gray-200"></div><div class="p-3 space-y-2"><div class="h-3 bg-gray-200 rounded w-4/5"></div><div class="h-3 bg-gray-200 rounded w-2/5"></div></div></div>';
         html += `
           ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1 pt-2 pb-1">${(() => { const intro = adIntro(); let n = 0; return shops.map(st => { const ad = st.isOpen && !st.suspended ? storeRankOf(st.id) : null, k = n++, box = 'flex:0 0 calc((100% - 42px) / 4);min-width:0';
@@ -2606,7 +2621,7 @@
             </div>` : ''}
           ${showFresh ? `<section class="space-y-2.5"><div class="flex items-end justify-between gap-2"><h3 class="${h3}">Món mới</h3><span class="text-[13px] text-gray-500">Thử ngay hôm nay</span></div><div data-scroll="fresh" class="flex gap-3 overflow-x-auto no-scrollbar -mx-3 px-3 pb-1.5">${fresh.map(foodMiniCardHtml).join('')}</div></section>` : ''}
           <section class="space-y-2.5">
-            ${(rest.length || !featured.length) && !(matchedStores.length && !rest.length) ? `<h3 class="${h3}">${gridTitle}</h3>` : ''}
+            ${(rest.length || !featured.length) && !(matchedStores.length && !rest.length) && gridTitle ? `<h3 class="${h3}">${gridTitle}</h3>` : ''}
             ${browsing && rest.length ? catGroupsHtml(rest) : `<div class="grid grid-cols-2 gap-3">
               ${rest.length ? rest.map(foodCardHtml).join('') : (featured.length || (matchedStores.length && state.searchQuery) ? '' : (!state.cloudLoaded && !state.foods.length ? skel + skel + skel + skel : `
                 <div class="col-span-2 bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-[13px] text-gray-500">
@@ -2643,14 +2658,20 @@
       if (state.activeTab === 'profile') {
         html += `
           <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-            <h2 class="font-extrabold text-base text-gray-900">Thông tin tài khoản</h2>
-            ${hasAccount() ? `<p class="text-[13px] text-gray-500">${accLoginLabel()}</p>` : '<p class="text-[13px] text-amber-700 font-bold">Bạn đang đặt món không cần tài khoản. Tạo tài khoản bằng số điện thoại để lưu thông tin và lịch sử đơn.</p>'}
+            <h2 class="font-extrabold text-base text-gray-900">📍 Thông tin nhận hàng</h2>
             ${accEditing() ? `<label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Họ và tên</span><input value="${state.profile.name}" oninput="state.profile.name=this.value;" class="field" placeholder="Nhập họ và tên" /></label>
             <label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Số điện thoại / Zalo</span><input value="${state.profile.phone}" oninput="state.profile.phone=this.value;" class="field" placeholder="09xxxxxxxx" inputmode="tel" /></label>
             <label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Địa chỉ giao hàng</span><textarea oninput="state.profile.address=this.value;" class="field min-h-16" placeholder="Thôn, Xóm, Số nhà...">${state.profile.address || ''}</textarea></label>
             <button onclick="saveProfile()" class="w-full bg-emerald-700 text-white py-3 rounded-xl text-[13px] font-extrabold">Lưu thông tin</button>
             ${state.user && state.profile.name && state.profile.phone ? '<button onclick="cancelAccEdit()" class="w-full border py-3 rounded-xl text-[13px] font-bold text-gray-600">Hủy</button>' : ''}` : accViewHtml()}
+          </div>
+          <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
+            <h2 class="font-extrabold text-base text-gray-900">⭐ Tài khoản và hạng hội viên</h2>
+            ${hasAccount() ? `<p class="text-[13px] text-gray-500">${accLoginLabel()}</p>` : '<p class="text-[13px] text-amber-700 font-bold">Bạn đang đặt món không cần tài khoản. Tạo tài khoản bằng số điện thoại để lưu thông tin, lịch sử đơn và tích điểm.</p>'}
             ${hasAccount() ? `<div class="bg-emerald-50 rounded-xl p-3 text-[13px]"><b class="text-emerald-800">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</b><p class="text-gray-500 mt-1">1 điểm cho mỗi 1.000đ đơn hoàn tất. Bạc từ 100 điểm, Vàng từ 300.</p></div><button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border py-3 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button>` : '<button onclick="state.showAuth=true; render();" class="w-full bg-amber-400 text-emerald-950 py-3 rounded-xl text-[13px] font-extrabold">Đăng nhập / Tạo tài khoản</button>'}
+          </div>
+          <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
+            <h2 class="font-extrabold text-base text-gray-900">🧰 Tiện ích và hỗ trợ</h2>
             ${installCardHtml()}
             ${supportCardHtml()}
           </div>
