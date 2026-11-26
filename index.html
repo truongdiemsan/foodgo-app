@@ -550,7 +550,7 @@
     }
     function contactHtml(storeId) {
       const s = state.stores.find(x => x.id === storeId); if (!s || !s.phone) return '';
-      return `<span class="flex gap-1.5"><a href="tel:${s.phone}" class="border px-2 py-1 rounded-lg text-[13px] font-bold">📞 Gọi</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="border px-2 py-1 rounded-lg text-[13px] font-bold">Zalo</a></span>`;
+      return `<span class="flex gap-1.5"><a href="tel:${s.phone}" class="border px-3 py-1.5 rounded-lg text-[13px] font-bold">📞 Gọi</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="border px-3 py-1.5 rounded-lg text-[13px] font-bold">Zalo</a></span>`;
     }
     // ===== GIAO DIỆN CHỦ QUÁN: đơn hàng lên đầu · thực đơn gọn · cài đặt thu gọn =====
     const orderTime = o => { const d = new Date(o.createdAt), t = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === new Date().toDateString() ? t : t + ' ' + d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }); };
@@ -1396,36 +1396,41 @@
         <div class="relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-black ${i <= cur ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500'} ${i === cur && cur < 3 ? 'ring-4 ring-emerald-200' : ''}">${i < cur || (i === cur && cur === 3) ? '✓' : i + 1}</div>
         <span class="mt-1 text-[13px] text-center leading-tight ${i <= cur ? 'font-bold text-emerald-800' : 'text-gray-400'}">${l}</span></div>`).join('')}</div>`;
     }
-    function orderCardHtml(o, collapsible) {
-      return `<div class="bg-white rounded-xl border border-gray-100 p-3 space-y-2 shadow-sm">
+    // Thẻ đơn gọn: tên quán + tiền, thanh trạng thái, tóm tắt món, thanh toán, 3 nút. Chi tiết chỉ mở khi khách bấm.
+    const barColor = { PENDING_CONFIRMATION: 'bg-amber-400', CONFIRMED: 'bg-sky-500', DELIVERING: 'bg-indigo-500', COMPLETED: 'bg-emerald-600' };
+    function orderCardHtml(o, collapsible, idx) {
+      const done = isDone(o), cur = STEP_OF[o.status] ?? 0, st = STATUS[o.status] || ['', ''];
+      const names = (o.items || []).map(i => escQ(i.name) + (i.quantity > 1 ? ' ×' + i.quantity : '')).join(', ');
+      const open = collapsible || (state.ordDetail || {})[o.id];
+      const bar = o.status === 'CANCELLED' ? '' : `<div class="flex gap-1">${STEPS.map((l, i) => `<span class="flex-1 h-1.5 rounded-full ${i <= cur ? (barColor[o.status] || 'bg-emerald-600') : 'bg-gray-200'}"></span>`).join('')}</div>`;
+      return `<div class="bg-white rounded-2xl border border-gray-100 p-3.5 space-y-2.5 shadow-sm">
         <div class="flex justify-between items-start gap-2">
-          <div><p class="text-[13px] font-bold">${o.id} - ${o.storeName}</p><p class="text-[13px] text-gray-400">${formatDate(o.createdAt)}</p></div>
-          ${collapsible ? '<button onclick="state.openOrderId=0; render();" class="text-[13px] font-bold text-gray-500">Thu gọn ▲</button>' : ''}
+          <div class="min-w-0"><b class="block text-[15px] truncate">${escQ(o.storeName)}</b><span class="text-[13px] text-gray-400">${o.id} · ${formatDate(o.createdAt)}</span></div>
+          <b class="shrink-0 text-[16px] text-gac">${money(o.total)}</b>
         </div>
-        ${stepperHtml(o.status)}
-        <div class="border-t pt-1.5 space-y-1 text-[13px]">${orderBodyHtml(o)}</div>
-        ${isDone(o) ? '' : orderPayHtml(o)}
-        <div class="border-t pt-2 flex justify-between items-center gap-2">
-          <span class="text-[13px] font-extrabold text-emerald-700">Tổng: ${money(o.total)}</span>${contactHtml(o.storeId)}
-          <button onclick="reorderOldOrder('${o.id}')" class="bg-amber-400 text-emerald-950 px-3 rounded-lg text-[13px] font-extrabold shadow-sm">🔄 Đặt lại</button>
-        </div></div>`;
+        <div class="space-y-1.5"><div class="flex justify-between items-center gap-2"><span class="text-[13px] font-bold px-2.5 py-0.5 rounded-full ${st[1]}">${st[0]}</span><span class="text-[13px] text-gray-400">${o.status === 'CANCELLED' ? '' : STEPS[cur] + ' ' + (cur + 1) + '/4'}</span></div>${bar}</div>
+        <button onclick="state.ordDetail = state.ordDetail || {}; ${collapsible ? 'state.openOrderId=0;' : `state.ordDetail['${o.id}'] = !state.ordDetail['${o.id}'];`} render();" class="w-full flex justify-between items-center gap-2 text-left text-[13px] text-gray-600"><span class="truncate">${names || 'Chi tiết đơn'}</span><b class="shrink-0 text-gray-500">${open ? 'Thu gọn ▲' : 'Chi tiết ▾'}</b></button>
+        ${open ? `<div class="border-t pt-2 space-y-1 text-[13px]">${orderBodyHtml(o)}</div>` : ''}
+        ${done ? '' : orderPayHtml(o, idx)}
+        <div class="flex gap-2 pt-0.5">${contactHtml(o.storeId)}<button onclick="reorderOldOrder('${o.id}')" class="ml-auto bg-amber-400 text-emerald-950 px-3.5 py-1.5 rounded-lg text-[13px] font-extrabold">🔄 Đặt lại</button></div></div>`;
     }
     // Thanh toán đơn bằng mã QR chuyển khoản: số tiền và nội dung điền sẵn, khách trả trước hoặc quét khi đến lấy
     const orderPayContent = o => 'DH ' + String(o.id).replace(/[^A-Za-z0-9\-]/g, '');
-    function orderPayHtml(o) {
+    function orderPayHtml(o, idx) {
       if (state.group && (state.group.deposits || []).some(d => d.orderId === o.id)) return '';   // đơn nhóm đã có khung cọc riêng
       const st = state.stores.find(x => x.id === o.storeId);
       const amount = Math.round(Number(o.total) || 0);
       if (!amount) return '';
-      if (!bankOk(st)) return `<div class="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 flex justify-between items-center gap-2"><span class="text-[13px] text-amber-900">💵 Số tiền cần trả</span><b class="text-[18px] text-gac">${money(amount)}</b></div><p class="text-[13px] text-gray-500 -mt-1">Thanh toán trực tiếp cho quán khi nhận hàng.</p>`;
-      const content = orderPayContent(o), hide = (state.payHide || {})[o.id];
+      if (!bankOk(st)) return `<p class="text-[13px] text-gray-500 bg-gray-50 rounded-xl px-3 py-2">💵 Trả tiền mặt cho quán khi nhận hàng</p>`;
+      const content = orderPayContent(o), open = (state.payOpen || {})[o.id] ?? (idx === 0);
       const line = (k, v, copy) => `<div class="flex items-center justify-between gap-2"><span class="text-gray-500 shrink-0">${k}</span><span class="font-bold text-gray-900 text-right break-all">${escQ(v)}</span>${copy ? `<button data-t="${attrQ(copy)}" onclick="copyTxt(this.dataset.t)" class="shrink-0 text-[13px] font-bold text-emerald-700 px-1">Chép</button>` : ''}</div>`;
-      return `<div class="rounded-2xl border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2">
-        <div class="flex justify-between items-center gap-2"><div><span class="block text-[13px] text-amber-900">💳 Số tiền cần thanh toán</span><b class="block text-[24px] leading-tight text-gac">${money(amount)}</b></div>
-          <button onclick="state.payHide = state.payHide || {}; state.payHide['${o.id}'] = !state.payHide['${o.id}']; render();" class="shrink-0 text-[13px] font-bold border border-amber-400 rounded-lg px-2.5 py-1.5 bg-white">${hide ? 'Hiện mã QR' : 'Ẩn mã QR'}</button></div>
-        ${hide ? '' : `<div class="text-center"><img src="${attrQ(vietQrUrl(st, amount, content))}" alt="Mã QR chuyển khoản" class="w-56 h-56 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-600 mt-1">Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn. Trả trước ngay, hoặc quét khi đến quán lấy hàng.</p></div>
-        <div class="bg-white rounded-xl p-2.5 space-y-1.5 text-[13px]">${line('Ngân hàng', bankName(st.bankCode))}${line('Số tài khoản', st.bankNo, st.bankNo)}${line('Chủ tài khoản', st.bankHolder)}${line('Nội dung', content, content)}</div>`}
-        <p class="text-[13px] text-gray-500">Không muốn chuyển khoản? Bạn vẫn có thể trả tiền mặt khi nhận hàng.</p></div>`;
+      const tog = `state.payOpen = state.payOpen || {}; state.payOpen['${o.id}'] = !${open}; render();`;
+      if (!open) return `<button onclick="${tog}" class="w-full flex justify-between items-center rounded-xl bg-amber-400 text-bark px-3.5 py-2.5 font-extrabold text-[14px] shadow-sm"><span>💳 Thanh toán ${money(amount)}</span><span>Hiện mã QR ›</span></button>`;
+      return `<div class="rounded-2xl border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2.5">
+        <div class="flex justify-between items-center gap-2"><div><span class="block text-[13px] text-amber-900">Thanh toán bằng mã QR</span><b class="block text-[22px] leading-tight text-gac">${money(amount)}</b></div><button onclick="${tog}" class="shrink-0 text-[13px] font-bold border border-amber-400 rounded-lg px-2.5 py-1.5 bg-white">Thu gọn ▲</button></div>
+        <div class="text-center"><img src="${attrQ(vietQrUrl(st, amount, content))}" alt="Mã QR chuyển khoản" class="w-52 h-52 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-600 mt-1">Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn. Trả trước hoặc quét khi đến lấy hàng.</p></div>
+        <details class="bg-white rounded-xl px-2.5 py-2 text-[13px]"><summary class="font-bold text-gray-700 cursor-pointer">Xem số tài khoản để chuyển thủ công</summary><div class="space-y-1.5 pt-2">${line('Ngân hàng', bankName(st.bankCode))}${line('Số tài khoản', st.bankNo, st.bankNo)}${line('Chủ tài khoản', st.bankHolder)}${line('Nội dung', content, content)}</div></details>
+        <p class="text-[13px] text-gray-500">Hoặc trả tiền mặt khi nhận hàng.</p></div>`;
     }
     function orderRowHtml(o) {
       const ok = o.status === 'COMPLETED', n = (o.items || []).reduce((a, i) => a + i.quantity, 0);
@@ -1438,9 +1443,7 @@
     function loginBenefitHtml() {
       if (hasAccount()) return `<p class="text-[13px] font-bold text-emerald-700">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</p>`;
       const n = state.orders.filter(o => !o.customerId || (state.user && o.customerId === state.user.id)).length;
-      return `<div class="rounded-2xl bg-bark text-white p-3.5 space-y-2.5 shadow-sm"><div><b class="block text-[15px] text-nghe">Đăng nhập để giữ đơn và nhận ưu đãi</b><span class="text-[13px] text-white/80">${n ? '📌 Máy này đang lưu ' + n + ' đơn của bạn. Đăng nhập để không mất lịch sử khi đổi máy hoặc xóa trình duyệt.' : 'Mỗi 1.000đ đặt món được 1 điểm. Đăng ký chỉ vài giây, không cần cài thêm gì.'}</span></div>
-        <div class="grid grid-cols-2 gap-1.5 text-[13px]"><span class="bg-white/10 rounded-lg px-2 py-1.5">⭐ Tích điểm, lên hạng</span><span class="bg-white/10 rounded-lg px-2 py-1.5">🔁 Xem và đặt lại đơn cũ</span><span class="bg-white/10 rounded-lg px-2 py-1.5">👥 Giữ đơn nhóm lâu dài</span><span class="bg-white/10 rounded-lg px-2 py-1.5">🎁 Nhận ưu đãi từ quán</span></div>
-        <button onclick="state.showAuth=true; render();" class="w-full bg-nghe text-bark rounded-xl py-3 text-[14px] font-extrabold">Đăng nhập / Đăng ký</button></div>`;
+      return `<div class="rounded-2xl bg-bark text-white px-3.5 py-3 flex items-center gap-3 shadow-sm"><div class="flex-1 min-w-0"><b class="block text-[14px] text-nghe">Đăng nhập để giữ đơn, tích điểm</b><span class="block text-[13px] text-white/75 leading-snug">${n ? 'Máy này đang lưu ' + n + ' đơn của bạn.' : 'Mỗi 1.000đ được 1 điểm.'}</span></div><button onclick="state.showAuth=true; render();" class="shrink-0 bg-nghe text-bark rounded-xl px-3.5 py-2.5 text-[14px] font-extrabold">Đăng nhập</button></div>`;
     }
     function recentDishes() {   // món khách từng đặt trên máy này (mới nhất trước), chỉ lấy món còn bán
       const seen = new Set(), out = [];
@@ -1459,10 +1462,25 @@
       });
       const paid = out.length, perStore = {};
       hotFoods(state.foods.filter(f => foodOk(f) && ok(state.stores.find(x => x.id === f.storeId)))).forEach(f => {
-        if (out.length >= SPOT_MAX || usedF.has(f.id) || perStore[f.storeId] || !(state.sales[f.id] > 0)) return;
+        if (paid || out.length >= 3 || usedF.has(f.id) || perStore[f.storeId] || !(state.sales[f.id] > 0)) return;
         perStore[f.storeId] = 1; usedF.add(f.id); out.push({ type: 'food', f, st: state.stores.find(x => x.id === f.storeId), ad: '' });
       });
       return { items: out.slice(0, SPOT_MAX), paid };
+    }
+    // Câu gợi ý cho từng quán: chọn theo loại quán và món đang bán, đổi theo ngày để khách không thấy lặp
+    const SPOT_LINES = [
+      [/nhau|bia|lau|nuong|hai san|\bbo\b|\bde\b|ruou|quay/, ['Ăn ngon, nhậu rẻ, nhớ ghé {n}', 'Tối nay hội bạn nhậu ở đâu? {n} có chỗ rồi', 'Mồi ngon bia mát, đã có {n} lo']],
+      [/ca phe|cafe|tra |sinh to|nuoc|do uong|sua chua|nuoc ep|tra sua/, ['Nắng nóng thế này, ghé {n} làm ly mát lạnh', 'Khát rồi đúng không? {n} đang chờ bạn', 'Một ly ở {n}, chiều nay thêm vui']],
+      [/an vat|banh|xien|chien|che |kem|trang/, ['Thèm ăn vặt? Nhớ ghé {n}', 'Chiều rảnh rỗi, {n} có món nhâm nhi đây', 'Ăn vặt đúng gu, tìm ngay {n}']],
+      [/pho|bun|mi |hu tieu|chao|com|banh canh|mon nuoc/, ['Chưa biết ăn gì? {n} có tô nóng hổi chờ bạn', 'Một bữa no nê ở {n}, ăn là nhớ', 'Đói bụng rồi, ghé {n} đi']],
+      [/dac san|que|mac khen|qua|nong san|trabong|tra bong/, ['Đúng vị Trà Bồng, chỉ có ở {n}', 'Về Trà Bồng mà chưa ghé {n}?', 'Quà quê đặc sản, {n} giữ hộ bạn']]
+    ];
+    const SPOT_ANY = ['Hôm nay ăn gì? Bấm vào {n} xem liền', '{n} có gì mà ai ghé cũng khen? Vào xem nhé', 'Đừng bỏ lỡ {n}, hôm nay có món bạn sẽ thích'];
+    function spotLine(st) {
+      const foods = state.foods.filter(f => f.storeId === st.id && foodOk(f));
+      const ctx = ' ' + vnAscii([st.name, st.category, st.slogan, ...foods.slice(0, 12).map(f => f.name + ' ' + (f.category || ''))].join(' ')).toLowerCase() + ' ';
+      const set = (SPOT_LINES.find(r => r[0].test(ctx)) || [0, SPOT_ANY])[1], h = [...String(st.id)].reduce((a, c) => a + c.charCodeAt(0), 0);
+      return { text: set[(h + Math.floor(Date.now() / 864e5)) % set.length].replace('{n}', st.name), n: foods.length };
     }
     function spotlightHtml() {
       const { items, paid } = spotItems(); spotN = items.length; if (!items.length) return '';
@@ -1470,14 +1488,14 @@
       const tag = (txt, ad) => `<span class="absolute top-3 left-3 z-10 ${ad ? 'bg-white/90 text-bark' : 'bg-nghe text-bark'} text-[13px] font-extrabold px-3 py-1 rounded-full shadow">${txt}</span>`;
       const slides = items.map((it, i) => {
         const on = i === spotIdx ? ' on' : '', ad = it.ad ? ` data-ad="${it.ad}"` : '';
-        if (it.type === 'store') { const st = it.st; return `<div class="sp-slide${on}"${ad} onclick="state.viewStoreId='${st.id}'; render();"><img src="${st.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10"></div>${tag('Tài trợ', true)}
-          <div class="absolute left-4 right-4 bottom-4 flex items-end gap-3"><img src="${st.image}" class="w-16 h-16 rounded-full object-cover border-[3px] border-white shrink-0" /><div class="min-w-0 flex-1"><b class="block font-display text-[22px] leading-tight text-white line-clamp-1">${escQ(st.name)}</b><span class="block text-[13px] text-white/85 line-clamp-1">${escQ(st.slogan || 'Đang mở cửa, đặt món ngay')}</span></div><span class="shrink-0 bg-nghe text-bark rounded-full px-4 py-2.5 text-[14px] font-extrabold shadow-lg">Xem quán ›</span></div></div>`; }
+        if (it.type === 'store') { const st = it.st, ln = spotLine(st); return `<div class="sp-slide${on}"${ad} onclick="state.viewStoreId='${st.id}'; render();"><img src="${attrQ(st.cover || st.image)}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/45 to-black/20"></div>${tag('Tài trợ', true)}
+          <div class="absolute left-4 right-4 bottom-4 space-y-2"><b class="block font-display text-[23px] leading-snug text-white line-clamp-3" style="text-shadow:0 2px 8px rgba(0,0,0,.6)">${escQ(ln.text)}</b><div class="flex items-center gap-2.5"><img src="${attrQ(st.image)}" class="w-9 h-9 rounded-full object-cover border-2 border-white shrink-0" /><span class="flex-1 min-w-0 text-[13px] text-white/90 line-clamp-1">${ln.n ? ln.n + ' món đang bán, bấm xem liền' : escQ(st.slogan || 'Đang mở cửa')}</span><span class="shrink-0 bg-nghe text-bark rounded-full px-4 py-2 text-[14px] font-extrabold shadow-lg">Xem quán ›</span></div></div></div>`; }
         const f = it.f, st = it.st || {}, go = `state.viewStoreId='${f.storeId}'; render();`;
         return `<div class="sp-slide${on}"${ad} onclick="${go}"><img src="${f.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/5"></div>${tag(it.ad ? 'Tài trợ' : '🔥 Bán chạy hôm nay', !!it.ad)}
           <div class="absolute left-4 right-[72px] bottom-4"><span class="block text-[13px] text-white/85 line-clamp-1">🏪 ${escQ(st.name || '')}</span><b class="block font-display text-[24px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><span class="font-extrabold text-[18px] text-nghe">${priceText(f)}</span></div><div class="absolute right-3 bottom-3 z-10">${plusHtml(f.id, true)}</div></div>`;
       }).join('');
-      return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[16px]">${paid ? '✨ Nổi bật hôm nay' : '🔥 Món bán chạy hôm nay'}</h3><span class="text-[13px] text-gray-400">${items.length > 1 ? 'tự chuyển món' : 'đặt ngay'}</span></div>
-        <div data-spot class="relative h-[230px] rounded-3xl overflow-hidden bg-bark-deep shadow-lg">${slides}</div>
+      return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[16px]">${paid ? '😋 Hôm nay ăn gì?' : '🔥 Món bán chạy hôm nay'}</h3><span class="text-[13px] text-gray-400">${items.length > 1 ? 'tự chuyển món' : 'đặt ngay'}</span></div>
+        <div data-spot class="relative h-[200px] rounded-3xl overflow-hidden bg-bark-deep shadow-lg">${slides}</div>
         ${items.length > 1 ? `<div class="flex justify-center gap-2">${items.map((_, i) => `<button onclick="spotGo(${i})" aria-label="Món ${i + 1}" data-spdot="${i}" class="h-2 rounded-full transition-all ${i === spotIdx ? 'w-6 bg-gac' : 'w-2 bg-gray-300'}"></button>`).join('')}</div>` : ''}</div>`;
     }
     function spotShow(i) {
@@ -1485,7 +1503,7 @@
       document.querySelectorAll('[data-spdot]').forEach((el, k) => { el.classList.toggle('w-6', k === i); el.classList.toggle('bg-gac', k === i); el.classList.toggle('w-2', k !== i); el.classList.toggle('bg-gray-300', k !== i); });
     }
     function spotGo(i) { spotPause = Date.now() + 9000; spotShow(i); }
-    setInterval(() => { if (document.hidden || Date.now() < spotPause || spotN < 2 || !document.querySelector('[data-spot]') || state.activeTab !== 'orders') return; spotShow((spotIdx + 1) % spotN); }, 4500);
+    setInterval(() => { if (document.hidden || Date.now() < spotPause || spotN < 2 || !document.querySelector('[data-spot]') || state.activeTab !== 'orders') return; spotShow((spotIdx + 1) % spotN); }, 5000);
     document.addEventListener('touchstart', e => { if (e.target && e.target.closest && e.target.closest('[data-spot]')) spotPause = Date.now() + 9000; }, { capture: true, passive: true });
     // Màn "chưa có cửa hàng": cho chủ quán thấy nỗi đau khi bán không app và cái được khi có app
     function noStoreHtml() {
@@ -1537,11 +1555,11 @@
       const row = list => `<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">${list.join('')}</div>`, h = (t, sub) => `<div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[15px]">${t}</h3>${sub ? `<span class="text-[13px] text-gray-400">${sub}</span>` : ''}</div>`;
       const recent = recentDishes(), recentHtml = recent.length ? h('🔁 Món bạn hay đặt', 'bấm + để đặt lại') + row(recent.map(foodMiniCardHtml)) : '';
       const owner = !!state.profile.myStoreId || state.isAdmin, free = Math.max(0, SPOT_MAX - activePromos().filter(p => slotInfo(p.slot).ord).length);
-      const zalo = PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="shrink-0 bg-bark text-nghe rounded-xl px-3.5 py-2.5 text-[13px] font-extrabold">Hỏi giá</a>` : '';
-      const promoCta = `<div class="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 p-3 flex items-center gap-3"><div class="flex-1 min-w-0"><b class="block text-[14px] text-bark">${owner ? 'Đưa món của bạn lên khu vực Nổi bật' : '🏪 Bạn là chủ quán?'}</b><span class="text-[13px] text-gray-600">Khách mở tab Đơn hàng là thấy món hoặc banner quán của bạn thật lớn, bấm là đặt.${free ? ' Hiện còn <b>' + free + '/' + SPOT_MAX + '</b> vị trí.' : ' Các vị trí đang kín, hỏi để được xếp lịch.'}</span></div>${zalo}</div>`;
-      const invite = `<div class="rounded-2xl p-3.5 space-y-2.5 text-white shadow-sm" style="background:linear-gradient(135deg,#b3261e,#e05a2b)"><div class="flex gap-3 items-start"><span class="text-3xl leading-none">🎁</span><div><b class="block text-[15px]">Mời bạn bè cùng đặt món</b><span class="text-[13px] text-white/90">Gửi ShopFood cho người quen ở Trà Bồng. Bạn bè có thêm chỗ đặt món ngon, các quán có thêm khách.</span></div></div>
-        <div class="flex gap-2"><button onclick="shareApp()" class="flex-1 bg-white text-[#b3261e] rounded-xl py-2.5 text-[14px] font-extrabold">📤 Chia sẻ ngay</button><button onclick="copyAppLink()" class="px-4 bg-white/20 rounded-xl text-[14px] font-bold">🔗 Chép link</button></div></div>`;
-      return spotlightHtml() + recentHtml + invite + promoCta;
+      const rowCls = 'w-full flex items-center gap-3 px-3.5 py-3 text-left';
+      const util = `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100 overflow-hidden">
+        <button onclick="shareApp()" class="${rowCls}"><span class="text-xl">🎁</span><span class="flex-1 min-w-0"><b class="block text-[14px]">Mời bạn bè cùng đặt món</b><span class="block text-[13px] text-gray-500">Gửi ShopFood cho người quen ở Trà Bồng</span></span><b class="shrink-0 text-[13px] text-gac">Chia sẻ ›</b></button>
+        ${PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="${rowCls}"><span class="text-xl">🏪</span><span class="flex-1 min-w-0"><b class="block text-[14px]">${owner ? 'Đưa món của bạn lên khu Nổi bật' : 'Bạn là chủ quán?'}</b><span class="block text-[13px] text-gray-500">${free ? 'Còn ' + free + '/' + SPOT_MAX + ' vị trí, khách thấy ngay khi mở tab này' : 'Các vị trí đang kín, hỏi để xếp lịch'}</span></span><b class="shrink-0 text-[13px] text-gac">Hỏi giá ›</b></a>` : ''}</div>`;
+      return spotlightHtml() + recentHtml + util;
     }
     const appLink = () => location.href.split('#')[0].split('?')[0];
     async function shareApp() {
@@ -1554,7 +1572,7 @@
       const mine = state.orders.filter(o => state.user && o.customerId === state.user.id);
       if (!mine.length) return `<div class="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center space-y-2"><p class="text-[13px] text-gray-500">Bạn chưa có đơn hàng nào.</p><button onclick="setTab('home')" class="bg-emerald-700 text-white px-4 rounded-xl text-[13px] font-bold">Khám phá thực đơn ngay</button></div>`;
       const active = mine.filter(o => !isDone(o)), done = mine.filter(isDone);
-      return (active.length ? `<h3 class="font-extrabold text-[15px]">🔥 Đơn đang chạy (${active.length})</h3>${active.map(o => orderCardHtml(o)).join('')}` : '<p class="text-[13px] text-gray-500">Hiện không có đơn nào đang chạy.</p>')
+      return (active.length ? `<h3 class="font-extrabold text-[15px]">🔥 Đơn đang chạy (${active.length})</h3>${active.map((o, i) => orderCardHtml(o, false, i)).join('')}` : '<p class="text-[13px] text-gray-500">Hiện không có đơn nào đang chạy.</p>')
         + (done.length ? `<h3 class="font-extrabold text-[15px] pt-2">Đơn đã xong (${done.length})</h3>${done.map(o => state.openOrderId === o.id ? orderCardHtml(o, true) : orderRowHtml(o)).join('')}` : '');
     }
 
