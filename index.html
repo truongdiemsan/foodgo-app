@@ -44,13 +44,16 @@
     .ad-in { animation: adIn .55s cubic-bezier(.2,.8,.2,1) both; }
     .ad-spin { position: absolute; inset: 0; border-radius: 9999px; background: conic-gradient(#f7c948, #fff6c4, #e09a00, #fff1a8, #f7c948); animation: adSpin 3.2s linear infinite; }
     .ad-wave { animation: adWave 6s ease-in-out infinite; }
+    .sp-slide { display: none; position: absolute; inset: 0; cursor: pointer; }
+    .sp-slide.on { display: block; animation: spIn .7s cubic-bezier(.2,.8,.2,1); }
+    @keyframes spIn { from { opacity: 0; transform: translateX(26px) scale(1.03); } to { opacity: 1; transform: none; } }
     @keyframes adBorder { from { background-position: 0% 50%; } to { background-position: 220% 50%; } }
     @keyframes adShine { 0% { transform: translateX(-140%) skewX(-18deg); } 55%, 100% { transform: translateX(380%) skewX(-18deg); } }
     @keyframes adSpark { 0%, 100% { opacity: 0; transform: scale(.4) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
     @keyframes adIn { from { opacity: 0; transform: translateY(16px) scale(.95); } to { opacity: 1; transform: none; } }
     @keyframes adSpin { to { transform: rotate(360deg); } }
     @keyframes adWave { 0%, 22%, 100% { transform: translateY(0) scale(1); } 6% { transform: translateY(-5px) scale(1.09); } 14% { transform: translateY(0) scale(1); } }
-    @media (prefers-reduced-motion: reduce) { .ad-anim, .ad-shine, .ad-spark, .ad-in, .ad-spin, .ad-wave { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .sp-slide.on, .ad-anim, .ad-shine, .ad-spark, .ad-in, .ad-spin, .ad-wave { animation: none !important; } }
     button:active { transform: scale(0.97); transition: transform .08s; }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
     .field { width: 100%; min-height: 44px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 11px 12px; font-size: 15px; color: #111827; background: #fff; outline: none; transition: all 0.2s; }
@@ -982,6 +985,10 @@
     const PROMO_SLOTS = {};
     FOOD_TIERS.forEach(t => PROMO_SLOTS[t.k] = { ...t, kind: 'food' });
     RANK_BASE.forEach((b, n) => PROMO_SLOTS['q' + (n + 1)] = { k: 'q' + (n + 1), icon: n < 3 ? ['🥇', '🥈', '🥉'][n] : '🏪', name: 'Quán số ' + (n + 1), kind: 'store', rank: n + 1, base: b, where: 'Quán đứng vị trí số ' + (n + 1) + ' trong "Quán quanh bạn", có huy hiệu số ' + (n + 1) + ' và vòng sáng.' });
+    // Khu vực "Nổi bật hôm nay" ở tab Đơn hàng (tối đa 5 vị trí, chạy lần lượt): món lớn hoặc banner quán. Admin tự thêm / bỏ, hoặc chủ quán mua gói.
+    PROMO_SLOTS.od_food = { k: 'od_food', icon: '📋', name: 'Tab Đơn hàng: món', kind: 'food', ord: true, base: 149000, where: 'Món hiện thật lớn ở tab Đơn hàng, chạy lần lượt cùng các món khác.' };
+    PROMO_SLOTS.od_store = { k: 'od_store', icon: '🏪', name: 'Tab Đơn hàng: banner quán', kind: 'banner', ord: true, base: 249000, where: 'Banner quán lớn ở tab Đơn hàng, chạy lần lượt cùng các món khác.' };
+    const SPOT_MAX = 5;
     const LEGACY_SLOT = { gold: 'vang', silver: 'bac', strip: 'q1' };   // gói cũ tự đổi sang hạng mới
     const normSlot = sl => LEGACY_SLOT[sl] || sl;
     const slotInfo = sl => PROMO_SLOTS[normSlot(sl)] || PROMO_SLOTS.dong;
@@ -1018,7 +1025,7 @@
     // Món quảng bá: xếp theo hạng từ kim cương xuống đồng, mỗi quán tối đa 3 món. Chỉ hiện khi món còn bán và quán đang mở.
     function sponsoredFoods() {
       const taken = new Set(), per = {}, out = [];
-      activePromos().filter(p => slotInfo(p.slot).kind === 'food' && p.foodId)
+      activePromos().filter(p => slotInfo(p.slot).kind === 'food' && !slotInfo(p.slot).ord && p.foodId)
         .map(p => ({ p, f: state.foods.find(x => x.id === p.foodId) }))
         .filter(x => x.f && x.f.storeId === x.p.storeId && foodOk(x.f) && !(state.stores.find(s => s.id === x.f.storeId) || {}).suspended)
         .sort((a, b) => slotInfo(b.p.slot).lvl - slotInfo(a.p.slot).lvl || promoRank(a.p) - promoRank(b.p))
@@ -1078,7 +1085,7 @@
 
     // --- Tạo, gia hạn, kết thúc gói (chỉ Admin) ---
     const promoForm = () => state.promoForm || (state.promoForm = { storeId: '', slot: 'vang', foodId: '', days: 7, price: '', note: '' });
-    function pfSet(k, v) { const f = promoForm(); f[k] = v; if (k === 'storeId' || (k === 'slot' && slotInfo(v).kind === 'store')) f.foodId = ''; render(); }
+    function pfSet(k, v) { const f = promoForm(); f[k] = v; if (k === 'storeId' || (k === 'slot' && slotInfo(v).kind !== 'food')) f.foodId = ''; render(); }
     function pfPrice(el) { promoForm().price = el.value; const v = parseShortPrice(el.value), p = document.getElementById('pfPricePrev'); if (p) p.textContent = v > 0 ? 'Thu: ' + money(v) : 'Bỏ trống là dùng thử miễn phí'; }
     function pfSuggest() { const f = promoForm(); f.price = String(promoSuggest(f.slot, +f.days || 7)); render(); }
     async function createPromo() {
@@ -1087,12 +1094,14 @@
       if (!f.storeId) return showToast('Hãy chọn quán cần quảng bá.');
       const sl = slotInfo(f.slot), live = activePromos();
       if (sl.kind === 'food' && !f.foodId) return showToast('Hãy chọn món cần quảng bá.');
-      if (sl.kind === 'food' && live.filter(p => p.storeId === f.storeId && slotInfo(p.slot).kind === 'food').length >= MAX_FOODS_PER_STORE) return showToast('Quán này đã có ' + MAX_FOODS_PER_STORE + ' món đang quảng bá (tối đa ' + MAX_FOODS_PER_STORE + ' món mỗi quán).');
+      if (sl.ord && live.filter(p => slotInfo(p.slot).ord).length >= SPOT_MAX) return showToast('Khu vực Nổi bật ở tab Đơn hàng đã đủ ' + SPOT_MAX + ' vị trí. Hãy kết thúc bớt một gói trước.');
+      if (sl.kind === 'banner' && live.some(p => p.slot === f.slot && p.storeId === f.storeId)) return showToast('Quán này đang có banner ở tab Đơn hàng rồi.');
+      if (sl.kind === 'food' && !sl.ord && live.filter(p => p.storeId === f.storeId && slotInfo(p.slot).kind === 'food' && !slotInfo(p.slot).ord).length >= MAX_FOODS_PER_STORE) return showToast('Quán này đã có ' + MAX_FOODS_PER_STORE + ' món đang quảng bá (tối đa ' + MAX_FOODS_PER_STORE + ' món mỗi quán).');
       if (sl.kind === 'food' && live.some(p => p.foodId === f.foodId)) return showToast('Món này đang được quảng bá rồi.');
       if (sl.kind === 'store') { const o = live.find(p => p.slot === f.slot); if (o) return showToast(sl.name + ' đang thuộc về "' + ((state.stores.find(x => x.id === o.storeId) || {}).name || 'quán khác') + '" đến ' + dmy(o.endsAt) + '. Hãy chọn vị trí khác.'); if (live.some(p => p.storeId === f.storeId && slotInfo(p.slot).kind === 'store')) return showToast('Quán này đang có một vị trí quán rồi.'); }
       const st = state.stores.find(x => x.id === f.storeId); if (st && !st.isOpen) showToast('Lưu ý: quán đang nghỉ nên quảng cáo chưa hiện cho khách.');
       const now = Date.now();
-      const { error } = await supabaseClient.from('promotions').insert([{ store_id: f.storeId, food_id: sl.kind === 'store' ? null : f.foodId, slot: f.slot, starts_at: new Date(now).toISOString(), ends_at: new Date(now + days * 864e5).toISOString(), price: parseShortPrice(f.price) || 0, note: f.note.trim() || null }]);
+      const { error } = await supabaseClient.from('promotions').insert([{ store_id: f.storeId, food_id: sl.kind === 'food' ? f.foodId : null, slot: f.slot, starts_at: new Date(now).toISOString(), ends_at: new Date(now + days * 864e5).toISOString(), price: parseShortPrice(f.price) || 0, note: f.note.trim() || null }]);
       if (error) return showToast(/check constraint|promotions_slot/.test(error.message) ? 'Chủ app cần chạy file promo-tiers-setup.sql trong Supabase để dùng các hạng mới.' : 'Chưa tạo được gói: ' + error.message);
       state.promoForm = { ...f, foodId: '', price: '', note: '' }; showToast('Đã bắt đầu quảng bá ' + days + ' ngày.'); refreshPromos();
     }
@@ -1165,6 +1174,8 @@
           <div class="grid grid-cols-5 gap-1.5">${FOOD_TIERS.map(t => `<button onclick="pfSet('slot', '${t.k}')" class="rounded-xl border-2 py-2 px-0.5 text-center ${f.slot === t.k ? 'border-emerald-700 bg-emerald-50' : 'border-gray-200 bg-white'}"><span class="block text-xl leading-none">${t.icon}</span><b class="block text-[13px] mt-1 leading-tight">${t.name}</b></button>`).join('')}</div></div>
         <div class="space-y-1.5"><span class="font-bold">Quảng bá quán <span class="font-normal text-gray-500">(vị trí trong Quán quanh bạn)</span></span>
           <div class="grid grid-cols-5 gap-1.5">${Object.values(PROMO_SLOTS).filter(v => v.kind === 'store').map(v => { const o = activePromos().find(p => p.slot === v.k), on = f.slot === v.k; return `<button onclick="pfSet('slot', '${v.k}')" class="rounded-xl border-2 py-2 text-center ${on ? 'border-emerald-700 bg-emerald-50' : o ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-gray-200 bg-white'}"><b class="block text-[15px] leading-none">${v.rank}</b><span class="block text-[13px] mt-1 leading-tight">${o ? 'đã có' : 'Số ' + v.rank}</span></button>`; }).join('')}</div></div>
+        <div class="space-y-1.5"><span class="font-bold">Khu vực Nổi bật ở tab Đơn hàng <span class="font-normal text-gray-500">(tối đa ${SPOT_MAX}, ${activePromos().filter(p => slotInfo(p.slot).ord).length} đang chạy)</span></span>
+          <div class="grid grid-cols-2 gap-1.5">${['od_food', 'od_store'].map(k => `<button onclick="pfSet('slot', '${k}')" class="rounded-xl border-2 py-2.5 px-1 text-center ${f.slot === k ? 'border-emerald-700 bg-emerald-50' : 'border-gray-200 bg-white'}"><span class="block text-xl leading-none">${PROMO_SLOTS[k].icon}</span><b class="block text-[13px] mt-1">${k === 'od_food' ? 'Món lớn' : 'Banner quán'}</b></button>`).join('')}</div></div>
         <p class="rounded-xl bg-gray-50 border border-gray-100 p-2.5 text-gray-600"><b class="text-gray-900">${slotInfo(f.slot).icon} ${slotInfo(f.slot).name}.</b> ${slotInfo(f.slot).where}</p>
         ${slotInfo(f.slot).kind === 'food' ? `<label class="block space-y-1"><span class="font-bold">Món cần quảng bá</span><select class="field" onchange="pfSet('foodId', this.value)"><option value="">${f.storeId ? 'Chọn món...' : 'Hãy chọn quán trước'}</option>${foods.map(x => `<option value="${attrQ(x.id)}" ${x.id === f.foodId ? 'selected' : ''}>${escQ(x.name)} (${priceText(x).replace(/<[^>]*>/g, '')})</option>`).join('')}</select></label>` : ''}
         <div class="grid grid-cols-2 gap-2"><label class="block space-y-1"><span class="font-bold">Thời gian</span><select class="field" onchange="pfSet('days', this.value)">${[7, 14, 30].map(d => `<option value="${d}" ${+f.days === d ? 'selected' : ''}>${d} ngày</option>`).join('')}</select></label>
@@ -1408,7 +1419,8 @@
     // ===== Tab Đơn hàng: các khối tiện ích dưới danh sách đơn =====
     function loginBenefitHtml() {
       if (hasAccount()) return `<p class="text-[13px] font-bold text-emerald-700">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</p>`;
-      return `<div class="rounded-2xl bg-bark text-white p-3.5 space-y-2.5 shadow-sm"><div><b class="block text-[15px] text-nghe">Đăng nhập để giữ đơn và nhận ưu đãi</b><span class="text-[13px] text-white/80">Chỉ mất vài giây, không cần cài thêm gì.</span></div>
+      const n = state.orders.filter(o => !o.customerId || (state.user && o.customerId === state.user.id)).length;
+      return `<div class="rounded-2xl bg-bark text-white p-3.5 space-y-2.5 shadow-sm"><div><b class="block text-[15px] text-nghe">Đăng nhập để giữ đơn và nhận ưu đãi</b><span class="text-[13px] text-white/80">${n ? '📌 Máy này đang lưu ' + n + ' đơn của bạn. Đăng nhập để không mất lịch sử khi đổi máy hoặc xóa trình duyệt.' : 'Mỗi 1.000đ đặt món được 1 điểm. Đăng ký chỉ vài giây, không cần cài thêm gì.'}</span></div>
         <div class="grid grid-cols-2 gap-1.5 text-[13px]"><span class="bg-white/10 rounded-lg px-2 py-1.5">⭐ Tích điểm, lên hạng</span><span class="bg-white/10 rounded-lg px-2 py-1.5">🔁 Xem và đặt lại đơn cũ</span><span class="bg-white/10 rounded-lg px-2 py-1.5">👥 Giữ đơn nhóm lâu dài</span><span class="bg-white/10 rounded-lg px-2 py-1.5">🎁 Nhận ưu đãi từ quán</span></div>
         <button onclick="state.showAuth=true; render();" class="w-full bg-nghe text-bark rounded-xl py-3 text-[14px] font-extrabold">Đăng nhập / Đăng ký</button></div>`;
     }
@@ -1418,16 +1430,55 @@
         .forEach(o => (o.items || []).forEach(i => { const f = state.foods.find(x => x.id === i.foodId); if (f && foodOk(f) && !seen.has(f.id) && out.length < 8 && !(state.stores.find(s => s.id === f.storeId) || {}).suspended) { seen.add(f.id); out.push(f); } }));
       return out;
     }
+    // Khu vực "Nổi bật hôm nay" (tối đa 5): gói quảng bá (món lớn / banner quán) lên trước, còn trống thì lấy món bán chạy nhất. Chạy lần lượt từng vị trí.
+    let spotIdx = 0, spotPause = 0, spotN = 0;
+    function spotItems() {
+      const out = [], usedF = new Set(), usedS = new Set(), ok = st => st && !st.suspended && st.isOpen;
+      activePromos().filter(p => slotInfo(p.slot).ord).sort((a, b) => new Date(b.startsAt) - new Date(a.startsAt)).forEach(p => {
+        const st = state.stores.find(x => x.id === p.storeId); if (!ok(st)) return;
+        if (slotInfo(p.slot).kind === 'banner') { if (!usedS.has(st.id)) { usedS.add(st.id); out.push({ type: 'store', st, ad: p.id }); } return; }
+        const f = state.foods.find(x => x.id === p.foodId); if (f && f.storeId === st.id && foodOk(f) && !usedF.has(f.id)) { usedF.add(f.id); out.push({ type: 'food', f, st, ad: p.id }); }
+      });
+      const paid = out.length, perStore = {};
+      hotFoods(state.foods.filter(f => foodOk(f) && ok(state.stores.find(x => x.id === f.storeId)))).forEach(f => {
+        if (out.length >= SPOT_MAX || usedF.has(f.id) || perStore[f.storeId] || !(state.sales[f.id] > 0)) return;
+        perStore[f.storeId] = 1; usedF.add(f.id); out.push({ type: 'food', f, st: state.stores.find(x => x.id === f.storeId), ad: '' });
+      });
+      return { items: out.slice(0, SPOT_MAX), paid };
+    }
+    function spotlightHtml() {
+      const { items, paid } = spotItems(); spotN = items.length; if (!items.length) return '';
+      if (spotIdx >= items.length) spotIdx = 0;
+      const tag = (txt, ad) => `<span class="absolute top-3 left-3 z-10 ${ad ? 'bg-white/90 text-bark' : 'bg-nghe text-bark'} text-[13px] font-extrabold px-3 py-1 rounded-full shadow">${txt}</span>`;
+      const slides = items.map((it, i) => {
+        const on = i === spotIdx ? ' on' : '', ad = it.ad ? ` data-ad="${it.ad}"` : '';
+        if (it.type === 'store') { const st = it.st; return `<div class="sp-slide${on}"${ad} onclick="state.viewStoreId='${st.id}'; render();"><img src="${st.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10"></div>${tag('Tài trợ', true)}
+          <div class="absolute left-4 right-4 bottom-4 flex items-end gap-3"><img src="${st.image}" class="w-16 h-16 rounded-full object-cover border-[3px] border-white shrink-0" /><div class="min-w-0 flex-1"><b class="block font-display text-[22px] leading-tight text-white line-clamp-1">${escQ(st.name)}</b><span class="block text-[13px] text-white/85 line-clamp-1">${escQ(st.slogan || 'Đang mở cửa, đặt món ngay')}</span></div><span class="shrink-0 bg-nghe text-bark rounded-full px-4 py-2.5 text-[14px] font-extrabold shadow-lg">Xem quán ›</span></div></div>`; }
+        const f = it.f, st = it.st || {}, go = `state.viewStoreId='${f.storeId}'; render();`;
+        return `<div class="sp-slide${on}"${ad} onclick="${go}"><img src="${f.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/5"></div>${tag(it.ad ? 'Tài trợ' : '🔥 Bán chạy hôm nay', !!it.ad)}
+          <div class="absolute left-4 right-[72px] bottom-4"><span class="block text-[13px] text-white/85 line-clamp-1">🏪 ${escQ(st.name || '')}</span><b class="block font-display text-[24px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><span class="font-extrabold text-[18px] text-nghe">${priceText(f)}</span></div><div class="absolute right-3 bottom-3 z-10">${plusHtml(f.id, true)}</div></div>`;
+      }).join('');
+      return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[16px]">${paid ? '✨ Nổi bật hôm nay' : '🔥 Món bán chạy hôm nay'}</h3><span class="text-[13px] text-gray-400">${items.length > 1 ? 'tự chuyển món' : 'đặt ngay'}</span></div>
+        <div data-spot class="relative h-[230px] rounded-3xl overflow-hidden bg-bark-deep shadow-lg">${slides}</div>
+        ${items.length > 1 ? `<div class="flex justify-center gap-2">${items.map((_, i) => `<button onclick="spotGo(${i})" aria-label="Món ${i + 1}" data-spdot="${i}" class="h-2 rounded-full transition-all ${i === spotIdx ? 'w-6 bg-gac' : 'w-2 bg-gray-300'}"></button>`).join('')}</div>` : ''}</div>`;
+    }
+    function spotShow(i) {
+      spotIdx = i; document.querySelectorAll('.sp-slide').forEach((el, k) => el.classList.toggle('on', k === i));
+      document.querySelectorAll('[data-spdot]').forEach((el, k) => { el.classList.toggle('w-6', k === i); el.classList.toggle('bg-gac', k === i); el.classList.toggle('w-2', k !== i); el.classList.toggle('bg-gray-300', k !== i); });
+    }
+    function spotGo(i) { spotPause = Date.now() + 9000; spotShow(i); }
+    setInterval(() => { if (document.hidden || Date.now() < spotPause || spotN < 2 || !document.querySelector('[data-spot]') || state.activeTab !== 'orders') return; spotShow((spotIdx + 1) % spotN); }, 4500);
+    document.addEventListener('touchstart', e => { if (e.target && e.target.closest && e.target.closest('[data-spot]')) spotPause = Date.now() + 9000; }, { capture: true, passive: true });
     function ordersExtrasHtml() {
       if (!state.stores.length) return '';
       const row = list => `<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">${list.join('')}</div>`, h = (t, sub) => `<div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[15px]">${t}</h3>${sub ? `<span class="text-[13px] text-gray-400">${sub}</span>` : ''}</div>`;
-      const recent = recentDishes(), pool = hotFoods(state.foods.filter(f => foodOk(f) && !(state.stores.find(x => x.id === f.storeId) || {}).suspended)).slice(0, 8);
-      const first = recent.length ? h('🔁 Món bạn hay đặt', 'bấm + để đặt lại') + row(recent.map(foodMiniCardHtml)) : pool.length ? h('🔥 Món bán chạy hôm nay', 'đặt ngay') + row(pool.map(foodMiniCardHtml)) : '';
-      const shown = new Set((recent.length ? recent : pool).map(f => f.id)), sp = sponsoredFoods().filter(f => !shown.has(f.id)).slice(0, 4);   // không hiện một món hai lần
-      const ads = sp.length ? h('✨ Gợi ý hôm nay', 'Tài trợ') + row(sp.map(f => `<div data-ad="${f._ad}" class="shrink-0">${foodMiniCardHtml(f)}</div>`)) : '';
+      const recent = recentDishes(), recentHtml = recent.length ? h('🔁 Món bạn hay đặt', 'bấm + để đặt lại') + row(recent.map(foodMiniCardHtml)) : '';
+      const owner = !!state.profile.myStoreId || state.isAdmin, free = Math.max(0, SPOT_MAX - activePromos().filter(p => slotInfo(p.slot).ord).length);
+      const zalo = PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="shrink-0 bg-bark text-nghe rounded-xl px-3.5 py-2.5 text-[13px] font-extrabold">Hỏi giá</a>` : '';
+      const promoCta = `<div class="rounded-2xl border-2 border-dashed border-amber-400 bg-amber-50 p-3 flex items-center gap-3"><div class="flex-1 min-w-0"><b class="block text-[14px] text-bark">${owner ? 'Đưa món của bạn lên khu vực Nổi bật' : '🏪 Bạn là chủ quán?'}</b><span class="text-[13px] text-gray-600">Khách mở tab Đơn hàng là thấy món hoặc banner quán của bạn thật lớn, bấm là đặt.${free ? ' Hiện còn <b>' + free + '/' + SPOT_MAX + '</b> vị trí.' : ' Các vị trí đang kín, hỏi để được xếp lịch.'}</span></div>${zalo}</div>`;
       const invite = `<div class="rounded-2xl p-3.5 space-y-2.5 text-white shadow-sm" style="background:linear-gradient(135deg,#b3261e,#e05a2b)"><div class="flex gap-3 items-start"><span class="text-3xl leading-none">🎁</span><div><b class="block text-[15px]">Mời bạn bè cùng đặt món</b><span class="text-[13px] text-white/90">Gửi ShopFood cho người quen ở Trà Bồng. Bạn bè có thêm chỗ đặt món ngon, các quán có thêm khách.</span></div></div>
         <div class="flex gap-2"><button onclick="shareApp()" class="flex-1 bg-white text-[#b3261e] rounded-xl py-2.5 text-[14px] font-extrabold">📤 Chia sẻ ngay</button><button onclick="copyAppLink()" class="px-4 bg-white/20 rounded-xl text-[14px] font-bold">🔗 Chép link</button></div></div>`;
-      return first + ads + invite;
+      return spotlightHtml() + recentHtml + invite + promoCta;
     }
     const appLink = () => location.href.split('#')[0].split('?')[0];
     async function shareApp() {
