@@ -1471,28 +1471,46 @@
     document.addEventListener('touchstart', e => { if (e.target && e.target.closest && e.target.closest('[data-spot]')) spotPause = Date.now() + 9000; }, { capture: true, passive: true });
     // Màn "chưa có cửa hàng": cho chủ quán thấy nỗi đau khi bán không app và cái được khi có app
     function noStoreHtml() {
-      const pains = [
-        ['📞', 'Khách gọi đúng lúc bạn bận tay, không nghe máy được', 'Khách tự chọn món và đặt trên app, đơn nằm đó chờ bạn'],
-        ['🗣️', 'Nghe được nhưng ghi nhầm món, thiếu topping, sai size', 'Đơn hiện đủ món, size, topping, ghi chú, địa chỉ, số điện thoại'],
-        ['🌙', 'Khuya khách gọi, quán đã nghỉ, khách bỏ đi quán khác', 'Trang quán luôn mở như tờ thực đơn, khách xem món và giá bất cứ lúc nào'],
-        ['🙅', 'Hết món vẫn bị gọi hỏi, phải giải thích từng người', 'Bấm một lần tắt món, khách không còn đặt được món đó'],
-        ['🍜', 'Món ngon, nấu tâm huyết mà không ai biết tới nên ế', 'Quán hiện cho khách quanh Trà Bồng, có link và mã QR để dán ở quán']
+      const groups = [
+        ['🔎', 'Khách không biết đến bạn', [
+          ['Món ngon, nấu tâm huyết mà không ai biết nên ế', 'Quán hiện cho khách quanh Trà Bồng ngay khi mở app'],
+          ['Chỉ bán được cho người quen, khách lạ ít ghé', 'Có link và mã QR riêng, dán ở quán, đăng Zalo và Facebook là khách vào đặt'],
+          ['Khách chẳng biết quán bán gì, giá bao nhiêu, phải hỏi từng người', 'Thực đơn có ảnh, giá, mô tả. Khách xem và chọn món bất cứ lúc nào']]],
+        ['📞', 'Nhận đơn qua điện thoại', [
+          ['Khách gọi đúng lúc bạn bận tay, không nghe máy được', 'Khách tự đặt trên app, đơn nằm đó chờ bạn, app báo khi có đơn mới'],
+          ['Nghe được nhưng ghi nhầm món, thiếu topping, sai size', 'Đơn hiện đủ món, size, topping, ghi chú, địa chỉ, số điện thoại. Không còn nghe nhầm'],
+          ['Quán đông khách, vừa nấu vừa nghe điện thoại, rối đơn', 'Đơn xếp theo trạng thái: mới, đang làm, hoàn thành. Bạn chỉ việc làm theo danh sách'],
+          ['Khuya khách gọi, quán đã nghỉ, khách bỏ đi quán khác', 'Trang quán luôn mở như tờ thực đơn, khách xem món và giá bất cứ lúc nào']]],
+        ['🍽️', 'Hết món, đổi món, khách tại bàn', [
+          ['Hết món vẫn bị gọi hỏi, phải giải thích từng người', 'Bấm một lần tắt món, khách không còn đặt được món đó'],
+          ['Đổi giá, đổi món phải nhắn từng nhóm, từng khách', 'Sửa một lần, mọi khách thấy giá mới ngay'],
+          ['Khách ngồi quán phải vẫy tay, gọi to, nhân viên chạy qua chạy lại', 'Mỗi bàn một mã QR. Khách quét, chọn món, bấm Gọi nhân viên']]],
+        ['💰', 'Tiền và sổ sách', [
+          ['Khách đặt rồi bỏ, làm xong không ai lấy', 'Đơn nhóm đông có thể thu cọc 30% qua mã QR chuyển khoản trước khi làm'],
+          ['Đưa số tài khoản bằng tin nhắn, khách chuyển sai nội dung, khó đối chiếu', 'Mã QR chuyển khoản có sẵn số tiền và nội dung, đối chiếu nhanh'],
+          ['Cuối ngày ngồi cộng sổ, không rõ món nào bán chạy', 'Đơn hoàn thành được lưu lại, xem được món bán chạy và khách hay đặt']]],
+        ['🤝', 'Giữ khách quay lại', [
+          ['Khách ăn một lần rồi quên, không ai nhớ bạn', 'Lưu danh sách khách đã đặt, nhắn Zalo cho khách cũ chỉ một chạm'],
+          ['Không có cách khoe quán ngon, khách lạ không dám thử', 'Khách chấm sao và đánh giá, quán càng ngon càng nhiều người tin'],
+          ['Muốn quảng cáo mà không biết bắt đầu từ đâu', 'Có gói đưa món hoặc banner quán lên chỗ khách nhìn thấy đầu tiên']]]
       ];
+      const total = groups.reduce((n, g) => n + g[2].length, 0);
+      const btn = lbl => `<button onclick="state.showStoreForm=true; render();" class="w-full bg-amber-400 text-bark px-5 py-3.5 rounded-xl text-[15px] font-black shadow-md">${lbl}</button>`;
       const zalo = PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="block text-center text-[13px] font-bold text-bark underline">Chưa rõ cách làm? Nhắn Zalo ${escQ(PLATFORM_ZALO)} để được hướng dẫn</a>` : '';
       return `<div class="space-y-4">
-        <div class="rounded-3xl p-5 text-white shadow-md" style="background:linear-gradient(135deg,#3b1d12,#7a3317)">
+        <div class="rounded-3xl p-5 text-white shadow-md space-y-3" style="background:linear-gradient(135deg,#3b1d12,#7a3317)">
           <b class="block font-display text-[22px] leading-snug">Quán ngon mà vắng khách, lỗi đâu phải ở món?</b>
-          <p class="text-[14px] text-white/85 mt-2 leading-relaxed">Tạo quán trên ShopFood chỉ 30 giây. Dù bạn bán gì, khách quanh đây cũng tìm thấy và đặt được.</p>
+          <p class="text-[14px] text-white/85 leading-relaxed">Tạo quán trên ShopFood chỉ 30 giây. Dù bạn bán gì, khách quanh đây cũng tìm thấy và đặt được.</p>
+          <button onclick="state.showStoreForm=true; render();" class="w-full bg-amber-400 text-bark px-5 py-3 rounded-xl text-[15px] font-black">✨ Tạo cửa hàng ngay</button>
         </div>
-        <div class="space-y-2.5">
-          <h3 class="font-extrabold text-[15px]">Bán không có app, bạn đang chịu những chuyện này</h3>
-          ${pains.map(p => `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div class="flex gap-3 items-start p-3 bg-red-50"><span class="text-xl leading-none">${p[0]}</span><span class="text-[14px] text-red-900 font-semibold leading-snug">${p[1]}</span></div>
-            <div class="flex gap-3 items-start p-3"><span class="text-xl leading-none">✅</span><span class="text-[14px] text-gray-800 leading-snug"><b class="text-emerald-700">Có ShopFood:</b> ${p[2]}</span></div></div>`).join('')}
-        </div>
+        <div class="flex gap-2 text-center text-[12px] font-bold"><div class="flex-1 rounded-xl bg-red-50 text-red-900 py-2">😣 Không có app</div><div class="flex-1 rounded-xl bg-green-50 text-green-900 py-2">😊 Có ShopFood</div></div>
+        ${groups.map(g => `<div class="space-y-2"><h3 class="font-extrabold text-[15px] pt-1">${g[0]} ${g[1]}</h3>
+          ${g[2].map(p => `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div class="flex gap-2.5 items-start p-3 bg-red-50"><span class="text-base leading-none">😣</span><span class="text-[14px] text-red-900 font-semibold leading-snug">${p[0]}</span></div>
+            <div class="flex gap-2.5 items-start p-3"><span class="text-base leading-none">😊</span><span class="text-[14px] text-gray-800 leading-snug">${p[1]}</span></div></div>`).join('')}</div>`).join('')}
         <div class="rounded-2xl bg-amber-50 border border-amber-300 p-4 text-center space-y-3">
-          <b class="block text-[15px] text-bark">Mỗi ngày chưa có app là thêm vài đơn trôi mất</b>
-          <button onclick="state.showStoreForm=true; render();" class="w-full bg-amber-400 text-bark px-5 py-3.5 rounded-xl text-[15px] font-black shadow-md">✨ Tạo cửa hàng của tôi ngay</button>
+          <b class="block text-[15px] text-bark">${total} chuyện phiền này, ShopFood lo giúp bạn</b>
+          ${btn('✨ Tạo cửa hàng của tôi ngay')}
           <span class="block text-[13px] text-gray-500">Chỉ cần tên quán, số điện thoại và vài món đầu tiên</span>
         </div>${zalo}</div>`;
     }
