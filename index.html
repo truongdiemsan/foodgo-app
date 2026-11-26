@@ -964,10 +964,10 @@
           <div class="absolute bottom-2 right-2 z-10">${plusHtml(f.id, true)}</div>
           ${sold > 0 ? `<span class="absolute top-2 left-2 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">Bán chạy</span>` : (newIds.has(f.id) ? '<span class="absolute top-2 left-2 bg-bark text-nghe text-[13px] font-bold px-2.5 py-0.5 rounded-full">Mới</span>' : '')}
         </div>
-        <div class="p-2.5 flex flex-col gap-1 flex-1 cursor-pointer" onclick="${go}">
+        <div class="px-2.5 pt-2.5 pb-2 flex flex-col flex-1 cursor-pointer" onclick="${go}">
           <b class="text-[14px] text-gray-900 leading-snug line-clamp-2">${f.name}</b>${noteChip(f.note)}
-          <p class="text-[13px] text-gray-500 flex items-center gap-1 min-w-0"><span class="shrink-0">🏪</span><span class="truncate font-semibold text-gray-600">${st.name || ''}</span><span class="text-amber-600 font-bold shrink-0">${ratingShort(f.storeId).replace('Quán mới', '')}</span></p>
-          <div class="mt-auto pt-1"><span class="block text-[17px] font-extrabold text-gac">${priceText(f)}</span></div>
+          <span class="block mt-1 text-[16px] leading-none font-extrabold text-gac">${priceText(f)}</span>
+          <div class="mt-auto pt-2.5"><div class="flex items-center gap-1.5 min-w-0 pt-2 border-t border-gray-100">${st.image ? `<img src="${st.image}" loading="lazy" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" />` : ''}<span class="truncate text-[13px] font-semibold text-gray-600 flex-1 min-w-0">${st.name || ''}</span><span class="text-[13px] font-bold text-amber-600 shrink-0">${ratingShort(f.storeId).replace('Quán mới', '').trim()}</span></div></div>
         </div></div>`;
     }
     // ===== QUẢNG BÁ TRÊN TRANG CHỦ: vị trí vàng, vị trí bạc, đầu danh sách quán =====
