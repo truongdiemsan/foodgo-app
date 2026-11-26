@@ -1404,10 +1404,28 @@
         </div>
         ${stepperHtml(o.status)}
         <div class="border-t pt-1.5 space-y-1 text-[13px]">${orderBodyHtml(o)}</div>
+        ${isDone(o) ? '' : orderPayHtml(o)}
         <div class="border-t pt-2 flex justify-between items-center gap-2">
           <span class="text-[13px] font-extrabold text-emerald-700">Tổng: ${money(o.total)}</span>${contactHtml(o.storeId)}
           <button onclick="reorderOldOrder('${o.id}')" class="bg-amber-400 text-emerald-950 px-3 rounded-lg text-[13px] font-extrabold shadow-sm">🔄 Đặt lại</button>
         </div></div>`;
+    }
+    // Thanh toán đơn bằng mã QR chuyển khoản: số tiền và nội dung điền sẵn, khách trả trước hoặc quét khi đến lấy
+    const orderPayContent = o => 'DH ' + String(o.id).replace(/[^A-Za-z0-9\-]/g, '');
+    function orderPayHtml(o) {
+      if (state.group && (state.group.deposits || []).some(d => d.orderId === o.id)) return '';   // đơn nhóm đã có khung cọc riêng
+      const st = state.stores.find(x => x.id === o.storeId);
+      const amount = Math.round(Number(o.total) || 0);
+      if (!amount) return '';
+      if (!bankOk(st)) return `<div class="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 flex justify-between items-center gap-2"><span class="text-[13px] text-amber-900">💵 Số tiền cần trả</span><b class="text-[18px] text-gac">${money(amount)}</b></div><p class="text-[13px] text-gray-500 -mt-1">Thanh toán trực tiếp cho quán khi nhận hàng.</p>`;
+      const content = orderPayContent(o), hide = (state.payHide || {})[o.id];
+      const line = (k, v, copy) => `<div class="flex items-center justify-between gap-2"><span class="text-gray-500 shrink-0">${k}</span><span class="font-bold text-gray-900 text-right break-all">${escQ(v)}</span>${copy ? `<button data-t="${attrQ(copy)}" onclick="copyTxt(this.dataset.t)" class="shrink-0 text-[13px] font-bold text-emerald-700 px-1">Chép</button>` : ''}</div>`;
+      return `<div class="rounded-2xl border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2">
+        <div class="flex justify-between items-center gap-2"><div><span class="block text-[13px] text-amber-900">💳 Số tiền cần thanh toán</span><b class="block text-[24px] leading-tight text-gac">${money(amount)}</b></div>
+          <button onclick="state.payHide = state.payHide || {}; state.payHide['${o.id}'] = !state.payHide['${o.id}']; render();" class="shrink-0 text-[13px] font-bold border border-amber-400 rounded-lg px-2.5 py-1.5 bg-white">${hide ? 'Hiện mã QR' : 'Ẩn mã QR'}</button></div>
+        ${hide ? '' : `<div class="text-center"><img src="${attrQ(vietQrUrl(st, amount, content))}" alt="Mã QR chuyển khoản" class="w-56 h-56 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-600 mt-1">Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn. Trả trước ngay, hoặc quét khi đến quán lấy hàng.</p></div>
+        <div class="bg-white rounded-xl p-2.5 space-y-1.5 text-[13px]">${line('Ngân hàng', bankName(st.bankCode))}${line('Số tài khoản', st.bankNo, st.bankNo)}${line('Chủ tài khoản', st.bankHolder)}${line('Nội dung', content, content)}</div>`}
+        <p class="text-[13px] text-gray-500">Không muốn chuyển khoản? Bạn vẫn có thể trả tiền mặt khi nhận hàng.</p></div>`;
     }
     function orderRowHtml(o) {
       const ok = o.status === 'COMPLETED', n = (o.items || []).reduce((a, i) => a + i.quantity, 0);
