@@ -42,6 +42,8 @@
     .ad-anim { animation: adBorder 3.4s linear infinite; }
     .ad-shine { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); animation: adShine 3.6s ease-in-out infinite; pointer-events: none; }
     .ad-spark { position: absolute; color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.9); animation: adSpark 2.4s ease-in-out infinite; pointer-events: none; }
+    .feat-h{height:172px}
+    .feat-w{width:calc(50% - 6px)}
     .ad-in { animation: adIn .55s cubic-bezier(.2,.8,.2,1) both; }
     .ad-spin { position: absolute; inset: 0; border-radius: 9999px; background: conic-gradient(#f7c948, #fff6c4, #e09a00, #fff1a8, #f7c948); animation: adSpin 3.2s linear infinite; }
     .ad-wave { animation: adWave 6s ease-in-out infinite; }
@@ -1400,15 +1402,15 @@
       const st = state.stores.find(x => x.id === f.storeId) || {}, sold = state.sales[f.id] || 0, go = `state.viewStoreId='${f.storeId}'; render();`;
       const wkSold = state.weekSales ? (state.weekSales[f.id] || 0) : 0, badge = wkSold > 0 || sold > 0 ? 'Bán chạy' : 'Món mới';
       if (f._tier) {   // món quảng bá: khung theo hạng
-        const t = { c1: '#d99a00', c2: '#ffe28a', lvl: 3 }, w = 'w-[calc(50%-6px)]';   // khách chỉ thấy một kiểu khung quảng bá duy nhất, không có hạng
-        return `<div data-feat class="snap-start shrink-0 ${w} ${adIntro() ? 'ad-in' : ''}" style="animation-delay:${(i || 0) * 120}ms"><div data-ad="${f._ad}" class="ad-frame ${t.lvl >= 3 ? 'ad-anim' : ''}" style="--c1:${t.c1};--c2:${t.c2}"><div class="relative h-[172px] rounded-[15px] overflow-hidden bg-bark-deep cursor-pointer" onclick="${go}">
+        const t = { c1: '#d99a00', c2: '#ffe28a', lvl: 3 }, w = 'feat-w';   // khách chỉ thấy một kiểu khung quảng bá duy nhất, không có hạng
+        return `<div data-feat class="snap-start shrink-0 ${w} ${adIntro() ? 'ad-in' : ''}" style="animation-delay:${(i || 0) * 120}ms"><div data-ad="${f._ad}" class="ad-frame ${t.lvl >= 3 ? 'ad-anim' : ''}" style="--c1:${t.c1};--c2:${t.c2}"><div class="relative feat-h rounded-[15px] overflow-hidden bg-bark-deep cursor-pointer" onclick="${go}">
           <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
           <span class="ad-shine"></span>
           <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[16px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><p class="font-extrabold text-[15px]" style="color:${t.c2}">${priceText(f)}</p></div>
           <div class="absolute right-2.5 bottom-2.5 z-10">${plusHtml(f.id, true)}</div></div></div></div>`;
       }
-      return `<div data-feat class="snap-start shrink-0 w-[calc(50%-6px)]"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative h-[172px] rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
+      return `<div data-feat class="snap-start shrink-0 feat-w"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative feat-h rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
         <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
         ${f._ad ? '' : `<span class="absolute top-2.5 left-2.5 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">${badge}</span>`}
@@ -2120,7 +2122,7 @@
         </div></header>`;
       if (state.searchQuery || state.selectedCategory !== 'Tất cả') return header;
       if (!show) return header;
-      const skeleton = loading ? '<div class="flex gap-3 px-4 overflow-hidden"><div class="shrink-0 w-[calc(50%-6px)] h-[172px] rounded-2xl bg-white/10 animate-pulse"></div><div class="shrink-0 w-[calc(50%-6px)] h-[172px] rounded-2xl bg-white/10 animate-pulse"></div></div>' : '';
+      const skeleton = loading ? '<div class="flex gap-3 px-4 overflow-hidden"><div class="shrink-0 feat-w feat-h rounded-2xl bg-white/10 animate-pulse"></div><div class="shrink-0 feat-w feat-h rounded-2xl bg-white/10 animate-pulse"></div></div>' : '';
       return header + `<section class="bg-gradient-to-b from-bark to-bark-deep text-white rounded-b-[24px] pb-4">
         <div class="px-4 pt-0.5 flex items-center justify-between gap-2"><h2 class="font-display text-[22px] leading-tight font-bold">Hôm nay ăn gì nhỉ?</h2>${featured.length > 2 ? `<div class="flex items-center gap-1.5" aria-hidden="true">${featured.map((f, i) => `<span data-dot="${i}" class="h-1.5 rounded-full transition-all ${i === 0 ? 'w-5 bg-nghe' : 'w-1.5 bg-white/35'}"></span>`).join('')}</div>` : ''}</div>
         <p class="px-4 mt-0.5 text-[13px] text-white/75">Chọn món, nhập số điện thoại và địa chỉ là xong.</p>
