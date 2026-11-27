@@ -12,6 +12,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ShopFood">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     // Bảng màu ShopFood: vỏ quế (nâu đỏ sâu) làm nền sang trọng, đỏ gấc cho nút đặt món, vàng nghệ cho điểm nhấn, xanh lá chỉ dùng cho trạng thái "đang mở".
@@ -31,7 +33,6 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
     .font-display { font-family: Fraunces, Georgia, 'Times New Roman', serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
@@ -68,11 +69,116 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .map-picker { height: 220px; width: 100%; border-radius: 1rem; z-index: 10; margin-top: 8px; }
   </style>
+  <meta name="color-scheme" content="dark">
+  <style id="dark-theme">
+    :root { color-scheme: dark; }
+    /* Giao diện tối sang trọng: nền than ấm, thẻ đen, chữ sáng; đỏ gấc và vàng nghệ là điểm nhấn */
+    body{background-color:#0f0e0d;color:#f6f0ea!important}
+    .bg-\[\#E9E3DC\]{background-color:#0f0e0d!important}
+    .bg-\[\#F6F3EF\]{background-color:#1e1b19!important}
+    .bg-\[\#e6e0d8\]{background-color:#3a3530!important}
+    .text-\[\#6B7280\]{color:#b3aaa1!important}
+    .text-\[\#8a8178\]{color:#968d84!important}
+    .text-\[\#C8820E\]{color:#F2B134!important}
+    .lift{box-shadow:0 2px 16px rgba(0,0,0,.5)!important}
+    .bg-white{background-color:#161412!important}
+    .bg-white\/95{background-color:rgba(22,20,18,.96)!important}
+    .bg-gray-50{background-color:#1f1c1a!important}
+    .bg-gray-50\/95{background-color:rgba(30,27,25,.96)!important}
+    .bg-gray-100{background-color:#2a2623!important}
+    .bg-gray-200{background-color:#35302c!important}
+    .bg-gray-300{background-color:#443e39!important}
+    .bg-slate-50{background-color:#1f1c1a!important}
+    .bg-slate-100{background-color:#2a2623!important}
+    .bg-emerald-50{background-color:#2b1a15!important}
+    .bg-emerald-100{background-color:#3a2019!important}
+    .bg-amber-50{background-color:#2b2214!important}
+    .bg-amber-50\/60{background-color:rgba(43,34,20,.6)!important}
+    .bg-amber-100{background-color:#3a2c12!important}
+    .bg-amber-200\/80{background-color:rgba(70,52,20,.85)!important}
+    .bg-rose-50{background-color:#2d1618!important}
+    .bg-rose-100{background-color:#3a1c1f!important}
+    .bg-red-50{background-color:#2d1618!important}
+    .bg-orange-50{background-color:#2d1d12!important}
+    .bg-green-50{background-color:#13251a!important}
+    .bg-green-50\/50{background-color:rgba(19,37,26,.6)!important}
+    .bg-green-100{background-color:#1b3326!important}
+    .bg-sky-50{background-color:#14232b!important}
+    .bg-sky-100{background-color:#1a2f3a!important}
+    .text-gray-900{color:#f6f0ea!important}
+    .text-gray-800{color:#f6f0ea!important}
+    .text-gray-700{color:#e6dcd2!important}
+    .text-gray-600{color:#d2c8be!important}
+    .text-gray-500{color:#b3aaa1!important}
+    .text-gray-400{color:#968d84!important}
+    .text-bark{color:#f3e4dc!important}
+    .text-emerald-700{color:#F0583A!important}
+    .text-emerald-800{color:#FF7A5C!important}
+    .text-emerald-900{color:#FFC2B0!important}
+    .text-emerald-950{color:#FFD2C4!important}
+    .text-amber-600{color:#E8A93A!important}
+    .text-amber-700{color:#F0B84E!important}
+    .text-amber-800{color:#F2C165!important}
+    .text-amber-900{color:#F6CF7A!important}
+    .text-amber-900\/80{color:rgba(246,207,122,.85)!important}
+    .text-rose-600{color:#FF7B7B!important}
+    .text-rose-700{color:#FF8F8F!important}
+    .text-rose-800{color:#FFA3A3!important}
+    .text-rose-900{color:#FFB8B8!important}
+    .text-red-900{color:#FFB3A6!important}
+    .text-green-700{color:#7fd49a!important}
+    .text-green-800{color:#8ddba6!important}
+    .text-green-900{color:#a3e5b8!important}
+    .text-sky-700{color:#8cc8e8!important}
+    .text-sky-800{color:#9fd3ee!important}
+    .text-sky-900{color:#b5ddf2!important}
+    .border-gray-100{border-color:#34302c!important}
+    .border-gray-200{border-color:#3d3833!important}
+    .border-gray-300{border-color:#4d4741!important}
+    .border-amber-200{border-color:#5a4520!important}
+    .border-amber-300{border-color:#6e5428!important}
+    .border-emerald-200{border-color:#5a2c20!important}
+    .border-emerald-300{border-color:#74392a!important}
+    .border-rose-200{border-color:#5a2a2e!important}
+    .border-rose-300{border-color:#6b2d31!important}
+    .border-green-200{border-color:#2f5a3d!important}
+    .border-green-300{border-color:#3b6e4a!important}
+    .border-orange-200{border-color:#5c3a1f!important}
+    .border-sky-300{border-color:#2d5568!important}
+    .divide-gray-100>:not([hidden])~:not([hidden]){border-color:#34302c!important}
+    .bg-amber-400.text-bark{color:#331510!important}
+    .bg-amber-400.text-emerald-700{color:#331510!important}
+    .bg-amber-400.text-emerald-800{color:#331510!important}
+    .bg-amber-400.text-emerald-900{color:#331510!important}
+    .bg-amber-400.text-emerald-950{color:#331510!important}
+    .bg-amber-400.text-gray-900{color:#331510!important}
+    .bg-amber-400.text-gray-800{color:#331510!important}
+    .bg-amber-400.text-amber-900{color:#331510!important}
+    .bg-amber-300.text-bark{color:#331510!important}
+    .bg-amber-300.text-emerald-700{color:#331510!important}
+    .bg-amber-300.text-emerald-800{color:#331510!important}
+    .bg-amber-300.text-emerald-900{color:#331510!important}
+    .bg-amber-300.text-emerald-950{color:#331510!important}
+    .bg-amber-300.text-gray-900{color:#331510!important}
+    .bg-amber-300.text-gray-800{color:#331510!important}
+    .bg-amber-300.text-amber-900{color:#331510!important}
+    .bg-nghe.text-bark{color:#331510!important}
+    .bg-nghe.text-emerald-700{color:#331510!important}
+    .bg-nghe.text-emerald-800{color:#331510!important}
+    .bg-nghe.text-emerald-900{color:#331510!important}
+    .bg-nghe.text-emerald-950{color:#331510!important}
+    .bg-nghe.text-gray-900{color:#331510!important}
+    .bg-nghe.text-gray-800{color:#331510!important}
+    .bg-nghe.text-amber-900{color:#331510!important}
+    img.bg-white{background-color:#fff!important}
+    input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([class*="bg-"]),textarea:not([class*="bg-"]),select:not([class*="bg-"]){background-color:#100f0e;color:#f6f0ea;border-color:#3d3833!important}
+    input::placeholder,textarea::placeholder{color:#8f867d!important;opacity:1}
+    option{background:#1e1b19;color:#f6f0ea}
+  </style>
 </head>
 <body class="bg-[#E9E3DC] min-h-screen">
   <div id="app" class="max-w-md mx-auto min-h-screen bg-[#F6F3EF] shadow-2xl relative pb-16 border-x border-black/5"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // KẾT NỐI SUPABASE CLOUD (Đã gắn sẵn URL & API Key của bạn)
     const SUPABASE_URL = 'https://rakzmchiogtdzewmnqtx.supabase.co';
@@ -118,8 +224,10 @@
 
     function compressImage(file, maxWidth, callback) {
       const reader = new FileReader();
+      reader.onerror = () => showToast('Không đọc được ảnh này. Hãy chọn ảnh khác.');
       reader.onload = function(e) {
         const img = new Image();
+        img.onerror = () => showToast('Ảnh không hợp lệ hoặc bị lỗi. Hãy chọn ảnh khác.');
         img.onload = function() {
           const canvas = document.createElement('canvas');
           let width = img.width;
@@ -131,8 +239,9 @@
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
-          callback(canvas.toDataURL('image/jpeg', 0.82));
+          callback(canvas.toDataURL('image/jpeg', 0.75));
         };
         img.src = e.target.result;
       };
@@ -203,15 +312,21 @@
       checkoutNote: '',
       toast: '',
       isListening: false, user: null, feePayments: [], isAdmin: false, soundOn: (() => { try { return localStorage.getItem('fg_sound') !== '0'; } catch { return true; } })(), showCart: false, viewStoreId: '', sales: {}, ratings: {}, myReviews: {}, infoFoodId: '', foodStats: {}, openOrderId: '', tableCtx: null, sizePick: '', canInstall: false, showInstallHelp: false, installDismissed: (() => { try { const t = parseInt(localStorage.getItem('fg_install_dismiss') || '0'); return !!(t && Date.now() - t < 7 * 864e5); } catch { return false; } })(), tableReq: {}, tableOpen: [], tableCount: (() => { try { return parseInt(localStorage.getItem('fg_tables') || '0') || 0; } catch { return 0; } })(), showAuth: false, authMode: 'login', authEmailMode: false, authShowPass: false, authPhone: savedProfile.phone, authPass: '', checkoutConsent: false,
-      showMapPicker: false, promos: [], promoReport: [], promoReady: null, adminPromoOpen: false, promoForm: null
+      promos: [], promoReport: [], promoReady: null, adminPromoOpen: false, promoForm: null
     };
 
     state.storeCat = 'Tất cả'; state.storeInfoOpen = false; state.showStoreQR = false; state.manageStoreId = ''; state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
-    let activeMapInstance = null;
-    let activeMapMarker = null;
 
     // TẢI DỮ LIỆU TỪ SUPABASE CLOUD KHI MỞ APP
-    async function loadCloudData() {
+    // Gộp nhiều lần tải dồn dập (realtime báo liên tục) thành 1 lần, và không chạy 2 lần cùng lúc
+    let cloudBusy = 0, cloudAgain = false, cloudTimer = null;
+    function loadCloudData() {
+      if (cloudBusy && Date.now() - cloudBusy < 20000) { cloudAgain = true; return Promise.resolve(); }
+      cloudBusy = Date.now();
+      return loadCloudDataNow().finally(() => { cloudBusy = 0; if (cloudAgain) { cloudAgain = false; loadCloudSoon(); } });
+    }
+    function loadCloudSoon() { clearTimeout(cloudTimer); cloudTimer = setTimeout(loadCloudData, 600); }
+    async function loadCloudDataNow() {
       if (!supabaseClient) return;
       try {
         const [storesRes, foodsRes, ordersRes] = await Promise.all([
@@ -261,11 +376,11 @@
     function setupRealtimeSync() {
       if (!supabaseClient) return;
       supabaseClient.channel('foodgo-realtime')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => loadCloudData())
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'foods' }, () => loadCloudData())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => loadCloudSoon())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'foods' }, () => loadCloudSoon())
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
           if (payload.eventType === 'UPDATE' && state.user && payload.new.customer_id === state.user.id) showToast('Đơn ' + payload.new.id + ': ' + (STATUS[payload.new.status] || [''])[0]);
-          loadCloudData();
+          loadCloudSoon();
         })
         .subscribe();
     }
@@ -327,7 +442,6 @@
         showToast('Đã xóa quán.');
       });
     }
-    function requireAccount() { if (!supabaseClient || hasAccount()) return true; state.showAuth = true; render(); return false; }
     function requireLogin() {
       if (!supabaseClient || state.user) return true;
       return true; // khách đặt món không cần đăng nhập, phiên ẩn danh được tạo khi bấm chốt đơn
@@ -544,10 +658,6 @@
     window.addEventListener('online', pollOwnerOrders);
     window.addEventListener('focus', updateBadge);
     document.addEventListener('pointerdown', () => { unlockAudio(); if (state.wakeOn && !wakeLock) applyWakeLock(); });
-    function storeInfoHtml() {
-      const s = state.stores.find(x => x.id === (state.cart[0] || {}).storeId); if (!s) return '';
-      return `<div class="bg-amber-50 rounded-xl p-3 text-[13px] space-y-1"><p><b>Giao hàng:</b> ${s.shipInfo || 'Hỏi quán khi đặt'}</p><p><b>Thanh toán:</b> ${s.payInfo || 'Thỏa thuận trực tiếp với quán'}</p><p class="text-gray-500">ShopFood chỉ kết nối. Phí giao và tiền món do bạn và quán thỏa thuận.</p></div>`;
-    }
     function contactHtml(storeId) {
       const s = state.stores.find(x => x.id === storeId); if (!s || !s.phone) return '';
       return `<span class="flex gap-1.5"><a href="tel:${s.phone}" class="border px-3 py-1.5 rounded-lg text-[13px] font-bold">📞 Gọi</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="border px-3 py-1.5 rounded-lg text-[13px] font-bold">Zalo</a></span>`;
@@ -662,7 +772,7 @@
       const pn = ownPending().length;
       return `${state.isAdmin && state.manageStoreId ? `<div class="rounded-2xl bg-sky-100 border border-sky-300 p-3 flex items-center justify-between gap-2"><b class="text-[13px] text-sky-900">🛠️ Admin đang quản lý quán: ${escQ(s.name)}</b><button onclick="exitManage()" class="px-3 rounded-xl bg-white border text-[13px] font-bold">Thoát</button></div>` : ''}
         <div class="sticky top-0 z-30 -mx-3 px-3 py-2 bg-gray-50/95 backdrop-blur"><div class="flex items-center gap-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-2">
-          <img src="${s.image}" class="w-11 h-11 rounded-xl object-cover shrink-0" />
+          <img loading="lazy" decoding="async" src="${s.image}" class="w-11 h-11 rounded-xl object-cover shrink-0" />
           <div class="flex-1 min-w-0"><b class="block text-[15px] text-gray-900 line-clamp-1">${escQ(s.name)}</b><p class="text-[13px] ${pn ? 'text-rose-600 font-bold' : s.isOpen ? 'text-green-700' : 'text-gray-500'}">${pn ? '🔴 ' + pn + ' đơn chờ xác nhận' : s.isOpen ? '● Đang mở bán' : 'Đang tạm nghỉ'}</p></div>
           <button onclick="toggleSound()" class="shrink-0 w-11 h-11 rounded-full text-xl ${state.soundOn ? 'bg-emerald-100' : 'bg-gray-100'}" aria-label="Bật tắt chuông báo">${state.soundOn ? '🔔' : '🔕'}</button>
           <button onclick="toggleStoreOpen('${s.id}')" class="shrink-0 h-11 px-3.5 rounded-full font-extrabold text-[13px] ${s.isOpen ? 'bg-green-700 text-white' : 'bg-gray-200 text-gray-700'}">${s.isOpen ? 'Đang mở' : 'Đang nghỉ'}</button></div></div>
@@ -714,7 +824,7 @@
       const cur = ymOf(Date.now());
       const rows = state.stores.map(s => ({ s, n: storeMonths(s.id)[cur] || 0, dues: feeDue(s.id).filter(d => !d.paid) })).sort((a, b) => b.dues.filter(isLate).length - a.dues.filter(isLate).length);
       return `<div class="space-y-3">
-        <div class="bg-white rounded-2xl border p-3 space-y-2 shadow-sm text-[13px]"><h3 class="font-extrabold text-sm text-gray-800">📱 Mã QR của app ShopFood</h3><p class="text-gray-500">Mã này mở trang chủ app với tất cả các quán. Chủ app chia sẻ để khách và chủ quán vào app.</p>${location.protocol === 'file:' ? '' : `<div class="text-center"><img src="${qrImg(appBaseUrl(), 220)}" class="w-40 h-40 border rounded-lg inline-block" /><p class="text-gray-400 break-all">${appBaseUrl()}</p></div><button onclick="printAppQR()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">🖨️ In mã QR của app</button>`}</div>
+        <div class="bg-white rounded-2xl border p-3 space-y-2 shadow-sm text-[13px]"><h3 class="font-extrabold text-sm text-gray-800">📱 Mã QR của app ShopFood</h3><p class="text-gray-500">Mã này mở trang chủ app với tất cả các quán. Chủ app chia sẻ để khách và chủ quán vào app.</p>${location.protocol === 'file:' ? '' : `<div class="text-center"><img loading="lazy" decoding="async" src="${qrImg(appBaseUrl(), 220)}" class="w-40 h-40 border rounded-lg inline-block" /><p class="text-gray-400 break-all">${appBaseUrl()}</p></div><button onclick="printAppQR()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">🖨️ In mã QR của app</button>`}</div>
         <div class="rounded-2xl bg-emerald-900 text-white p-4"><p class="text-[13px] text-emerald-200 font-bold">QUẢN TRỊ NỀN TẢNG</p>
           <p class="text-sm font-black">${rows.length} quán · phí tạm tính tháng này ${money(rows.reduce((a, r) => a + feeFor(r.n), 0))}</p>
           <button onclick="hideOverdue()" class="mt-2 bg-amber-400 text-emerald-950 px-3 py-1.5 rounded-lg text-[13px] font-extrabold">Ẩn các quán quá hạn</button></div>
@@ -836,7 +946,7 @@
       return `<div class="fixed inset-0 z-50 bg-black/60 flex items-end justify-center" onclick="state.showStoreQR=false; render();"><div class="bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3 shadow-2xl" onclick="event.stopPropagation()">
         <div class="mx-auto h-1.5 w-12 rounded-full bg-gray-300"></div>
         <div class="flex items-center justify-between"><h3 class="font-extrabold text-[16px]">Mã QR của quán</h3><button onclick="state.showStoreQR=false; render();" class="w-9 h-9 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
-        <div class="text-center space-y-1.5"><img src="${qrImg(link, 280)}" class="w-56 h-56 mx-auto border rounded-2xl p-1 bg-white" /><p class="font-extrabold text-[16px]">${s.name}</p><p class="text-[13px] text-gray-500">Người quen quét mã này là vào thẳng quán để chọn món và đặt hàng.</p></div>
+        <div class="text-center space-y-1.5"><img loading="lazy" decoding="async" src="${qrImg(link, 280)}" class="w-56 h-56 mx-auto border rounded-2xl p-1 bg-white" /><p class="font-extrabold text-[16px]">${s.name}</p><p class="text-[13px] text-gray-500">Người quen quét mã này là vào thẳng quán để chọn món và đặt hàng.</p></div>
         <div class="flex gap-2"><button onclick="shareStore('${s.id}')" class="flex-1 bg-emerald-700 text-white rounded-xl py-3 font-extrabold text-[14px]">📤 Chia sẻ</button><button onclick="copyShareLink('${s.id}')" class="flex-1 border border-emerald-700 text-emerald-800 rounded-xl py-3 font-extrabold text-[14px]">🔗 Sao chép link</button></div>
         <p class="text-[13px] text-gray-400 text-center">Nhấn giữ hình QR để lưu về máy.</p></div></div>`;
     }
@@ -860,14 +970,14 @@
       const barOn = state.storeScrolled && state.storeScrolledId === s.id ? 1 : 0;
       return `<div class="fixed inset-0 z-40 bg-[#F6F3EF] overflow-y-auto" data-scroll="s0"><div class="max-w-md mx-auto pb-28">
         <div class="sticky top-0 z-30 h-[52px]">
-          <div id="storeBarBg" class="absolute inset-0 bg-bark shadow-lg overflow-hidden transition-opacity duration-200" style="opacity:${barOn}">${s.cover ? `<img src="${s.cover}" class="absolute inset-0 w-full h-full object-cover" />` : ''}<div class="absolute inset-0 bg-bark/80"></div></div>
+          <div id="storeBarBg" class="absolute inset-0 bg-bark shadow-lg overflow-hidden transition-opacity duration-200" style="opacity:${barOn}">${s.cover ? `<img loading="lazy" decoding="async" src="${s.cover}" class="absolute inset-0 w-full h-full object-cover" />` : ''}<div class="absolute inset-0 bg-bark/80"></div></div>
           <div class="relative h-full px-3 flex items-center gap-2.5">${back}<b id="storeBarName" class="flex-1 min-w-0 font-display text-[18px] text-white truncate transition-opacity duration-200" style="opacity:${barOn}">${escQ(s.name)}</b><button onclick="openCart()" aria-label="Mở giỏ hàng" class="shrink-0 bg-white text-bark rounded-full pl-3 pr-1 h-9 flex items-center gap-1.5 font-extrabold shadow-md text-[15px] border border-gray-200">🛒 <span class="bg-gac text-white rounded-full min-w-[24px] h-[24px] px-1 flex items-center justify-center text-[13px] font-black">${cartCount()}</span></button></div>
         </div>
-        <div class="relative h-[176px] bg-gradient-to-r from-bark to-bark-soft overflow-hidden">${s.cover ? `<img src="${s.cover}" alt="" class="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-80" /><img src="${s.cover}" alt="${attrQ(s.name)}" class="relative w-full h-full object-contain" />` : ''}</div>
+        <div class="relative h-[176px] bg-gradient-to-r from-bark to-bark-soft overflow-hidden">${s.cover ? `<img loading="lazy" decoding="async" src="${s.cover}" alt="" class="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-80" /><img loading="lazy" decoding="async" src="${s.cover}" alt="${attrQ(s.name)}" class="relative w-full h-full object-contain" />` : ''}</div>
         <div class="px-3 mt-3 relative space-y-3">
           <div class="bg-white rounded-2xl shadow-md border border-gray-100 p-3 space-y-2.5">
             <div class="flex gap-3 items-center">
-              <img src="${s.image}" class="w-14 h-14 rounded-xl object-cover shrink-0" />
+              <img loading="lazy" decoding="async" src="${s.image}" class="w-14 h-14 rounded-xl object-cover shrink-0" />
               <div class="min-w-0 flex-1">
                 <h2 class="font-black text-[17px] text-gray-900 leading-tight truncate">${s.name}</h2>
                 <div class="flex flex-wrap items-center gap-1.5 mt-1">
@@ -911,8 +1021,8 @@
       if (editing && (!state.storeEdit || state.storeEdit.id !== s.id)) state.storeEdit = { id: s.id, cover: s.cover || '', image: s.image || '', slogan: s.slogan || '', about: s.about || '', hours: s.openHours || '' };
       const e = editing ? state.storeEdit : { cover: s.cover || '', image: s.image || '', slogan: s.slogan || '', about: s.about || '', hours: s.openHours || '' };
       const q = v => String(v).replace(/"/g, '&quot;');
-      const head = `<div class="relative h-32 bg-gradient-to-r from-emerald-800 to-teal-600">${e.cover ? `<img src="${e.cover}" class="w-full h-full object-cover" />` : '<p class="absolute inset-0 flex items-center justify-center text-emerald-100 font-bold">Chưa có ảnh bìa</p>'}</div>
-        <div class="px-3 -mt-8 relative flex items-end gap-2"><img src="${e.image}" class="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow" /><b class="text-sm pb-1">${s.name}</b></div>`;
+      const head = `<div class="relative h-32 bg-gradient-to-r from-emerald-800 to-teal-600">${e.cover ? `<img loading="lazy" decoding="async" src="${e.cover}" class="w-full h-full object-cover" />` : '<p class="absolute inset-0 flex items-center justify-center text-emerald-100 font-bold">Chưa có ảnh bìa</p>'}</div>
+        <div class="px-3 -mt-8 relative flex items-end gap-2"><img loading="lazy" decoding="async" src="${e.image}" class="w-16 h-16 rounded-2xl object-cover border-4 border-white shadow" /><b class="text-sm pb-1">${s.name}</b></div>`;
       if (!editing) {
         return `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden text-[13px]">${head}
           <div class="p-3 space-y-2">
@@ -1201,7 +1311,7 @@
     function promoBoardHtml(rep) {
       const area = r => { const k = slotInfo(r.slot); return k.ord ? '📋 Tab Đơn hàng' : k.kind === 'store' ? '🏪 Quán quanh bạn' : '🏠 Đầu trang chủ'; };
       const row = (r, live) => { const k = slotInfo(r.slot), st = state.stores.find(x => x.id === r.storeId) || {}, f = r.foodId ? state.foods.find(x => x.id === r.foodId) : null, left = Math.max(1, Math.ceil((new Date(r.endsAt) - Date.now()) / 864e5));
-        return `<div class="flex items-center gap-2.5 py-2"><img src="${attrQ(f ? f.image : st.image)}" class="w-10 h-10 rounded-lg object-cover shrink-0 ${live ? '' : 'grayscale'}" /><div class="min-w-0 flex-1"><b class="block text-[14px] text-gray-900 truncate">${escQ(f ? f.name : st.name || 'Quán đã xóa')}</b><span class="block text-[13px] text-gray-500 truncate">${f ? escQ(st.name || '') + ' · ' : ''}${area(r)}${live ? ' · còn ' + left + ' ngày' : ''}</span></div>
+        return `<div class="flex items-center gap-2.5 py-2"><img loading="lazy" decoding="async" src="${attrQ(f ? f.image : st.image)}" class="w-10 h-10 rounded-lg object-cover shrink-0 ${live ? '' : 'grayscale'}" /><div class="min-w-0 flex-1"><b class="block text-[14px] text-gray-900 truncate">${escQ(f ? f.name : st.name || 'Quán đã xóa')}</b><span class="block text-[13px] text-gray-500 truncate">${f ? escQ(st.name || '') + ' · ' : ''}${area(r)}${live ? ' · còn ' + left + ' ngày' : ''}</span></div>
           <button onclick="${live ? `endPromo('${r.promoId}')` : `reviveSlot('${r.promoId}')`}" class="shrink-0 h-9 px-3 rounded-xl text-[13px] font-extrabold ${live ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-900'}">${live ? 'Tắt' : 'Bật lại 7 ngày'}</button></div>`; };
       const live = rep.filter(promoLive), off = rep.filter(r => !promoLive(r)).slice(0, 3);
       return `<div class="bg-white rounded-2xl border border-green-200 shadow-sm p-3 text-[13px]"><b class="block text-[14px] text-gray-900 mb-1">🟢 Đang hiển thị cho khách (${live.length})</b>
@@ -1394,12 +1504,6 @@
     function categoryBarHtml() {
       return `<div data-scroll="cats" class="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">${['Tất cả', ...CATEGORIES].map(c => `<button onclick="state.selectedCategory='${c}'; render();" class="shrink-0 px-5 rounded-full border text-[14px] font-bold ${state.selectedCategory === c ? 'bg-bark border-bark text-nghe' : 'bg-white border-gray-200 text-gray-700'}">${c}</button>`).join('')}</div>`;
     }
-    function setFoodCategory(id, cat) {
-      const f = state.foods.find(x => x.id === id); if (!f) return;
-      f.category = cat; saveState(); render();
-      if (supabaseClient) supabaseClient.from('foods').update({ category: cat }).eq('id', id).then(({ error }) => { if (error) showToast('Không lưu được danh mục lên máy chủ.'); });
-      showToast('Đã chuyển món sang mục ' + cat + '.');
-    }
 
     function toggleFoodStock(id) {
       const f = state.foods.find(x => x.id === id); if (!f) return;
@@ -1412,14 +1516,6 @@
     const STEPS = ['Đã gửi', 'Quán nhận', 'Đang giao', 'Xong'];
     const STEP_OF = { PENDING_CONFIRMATION: 0, CONFIRMED: 1, DELIVERING: 2, COMPLETED: 3 };
     const isDone = o => o.status === 'COMPLETED' || o.status === 'CANCELLED';
-    function stepperHtml(status) {
-      if (status === 'CANCELLED') return '<div class="bg-rose-50 text-rose-700 rounded-lg p-2 font-bold text-[13px]">✕ Đơn đã hủy</div>';
-      const cur = STEP_OF[status] ?? 0;
-      return `<div class="flex items-start pt-1">${STEPS.map((l, i) => `<div class="flex-1 flex flex-col items-center relative">
-        ${i > 0 ? `<div class="absolute top-4 -left-1/2 w-full h-1 ${i <= cur ? 'bg-emerald-600' : 'bg-gray-200'}"></div>` : ''}
-        <div class="relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-black ${i <= cur ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-500'} ${i === cur && cur < 3 ? 'ring-4 ring-emerald-200' : ''}">${i < cur || (i === cur && cur === 3) ? '✓' : i + 1}</div>
-        <span class="mt-1 text-[13px] text-center leading-tight ${i <= cur ? 'font-bold text-emerald-800' : 'text-gray-400'}">${l}</span></div>`).join('')}</div>`;
-    }
     // Thẻ đơn gọn: tên quán + tiền, thanh trạng thái, tóm tắt món, thanh toán, 3 nút. Chi tiết chỉ mở khi khách bấm.
     const barColor = { PENDING_CONFIRMATION: 'bg-amber-400', CONFIRMED: 'bg-sky-500', DELIVERING: 'bg-indigo-500', COMPLETED: 'bg-emerald-600' };
     function orderCardHtml(o, collapsible, idx) {
@@ -1456,7 +1552,7 @@
       if (!open) return `<button onclick="${tog}" class="w-full flex justify-between items-center rounded-xl bg-amber-400 text-bark px-3.5 py-2.5 font-extrabold text-[14px] shadow-sm"><span>💳 Thanh toán ${money(amount)}</span><span>Hiện mã QR ›</span></button>`;
       return `<div class="rounded-2xl border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2.5">
         <div class="flex justify-between items-center gap-2"><div><span class="block text-[13px] text-amber-900">Thanh toán bằng mã QR</span><b class="block text-[22px] leading-tight text-gac">${money(amount)}</b></div><button onclick="${tog}" class="shrink-0 text-[13px] font-bold border border-amber-400 rounded-lg px-2.5 py-1.5 bg-white">Thu gọn ▲</button></div>
-        <div class="text-center"><img src="${attrQ(vietQrUrl(st, amount, content))}" alt="Mã QR chuyển khoản" class="w-52 h-52 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-600 mt-1">Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn. Trả trước hoặc quét khi đến lấy hàng.</p></div>
+        <div class="text-center"><img loading="lazy" decoding="async" src="${attrQ(vietQrUrl(st, amount, content))}" alt="Mã QR chuyển khoản" class="w-52 h-52 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-600 mt-1">Quét bằng app ngân hàng, số tiền và nội dung đã điền sẵn. Trả trước hoặc quét khi đến lấy hàng.</p></div>
         <details class="bg-white rounded-xl px-2.5 py-2 text-[13px]"><summary class="font-bold text-gray-700 cursor-pointer">Xem số tài khoản để chuyển thủ công</summary><div class="space-y-1.5 pt-2">${line('Ngân hàng', bankName(st.bankCode))}${line('Số tài khoản', st.bankNo, st.bankNo)}${line('Chủ tài khoản', st.bankHolder)}${line('Nội dung', content, content)}</div></details>
         <p class="text-[13px] text-gray-500">Hoặc trả tiền mặt khi nhận hàng.</p></div>`;
     }
@@ -1485,11 +1581,6 @@
         : `<button onclick="state.showAuth=true; render();" class="shrink-0 h-8 px-3.5 rounded-full bg-bark text-nghe text-[13px] font-extrabold">Đăng nhập</button>`;
       const hint = hasAccount() ? '' : `<p class="text-[13px] text-gray-500 -mt-1">${n ? 'Máy này đang lưu ' + n + ' đơn. Đăng nhập để không mất lịch sử và tích điểm.' : 'Đăng nhập để giữ lịch sử đơn và tích điểm.'}</p>`;
       return `<div class="flex items-center justify-between gap-2"><h2 class="font-extrabold text-[17px]">Đơn hàng của tôi</h2>${right}</div>${hint}`;
-    }
-    function loginBenefitHtml() {
-      if (hasAccount()) return `<p class="text-[13px] font-bold text-emerald-700">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</p>`;
-      const n = state.orders.filter(o => !o.customerId || (state.user && o.customerId === state.user.id)).length;
-      return `<div class="rounded-2xl bg-bark text-white px-3.5 py-3 flex items-center gap-3 shadow-sm"><div class="flex-1 min-w-0"><b class="block text-[14px] text-nghe">Đăng nhập để giữ đơn, tích điểm</b><span class="block text-[13px] text-white/75 leading-snug">${n ? 'Máy này đang lưu ' + n + ' đơn của bạn.' : 'Mỗi 1.000đ được 1 điểm.'}</span></div><button onclick="state.showAuth=true; render();" class="shrink-0 bg-nghe text-bark rounded-xl px-3.5 py-2.5 text-[14px] font-extrabold">Đăng nhập</button></div>`;
     }
     function recentDishes() {   // món khách từng đặt trên máy này (mới nhất trước), chỉ lấy món còn bán
       const seen = new Set(), out = [];
@@ -1535,10 +1626,10 @@
       const tag = (txt, ad) => `<span class="absolute top-3 left-3 z-10 ${ad ? 'bg-white/90 text-bark' : 'bg-nghe text-bark'} text-[13px] font-extrabold px-3 py-1 rounded-full shadow">${txt}</span>`;
       const slides = items.map((it, i) => {
         const on = i === spotIdx ? ' on' : '', ad = it.ad ? ` data-ad="${it.ad}"` : '';
-        if (it.type === 'store') { const st = it.st, ln = spotLine(st), im = attrQ(st.cover || st.image); return `<div class="sp-slide${on}"${ad} onclick="state.viewStoreId='${st.id}'; render();"><div class="absolute inset-x-0 top-0 h-[190px] overflow-hidden bg-bark-deep"><img src="${im}" alt="" class="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-80" /><img src="${im}" alt="${attrQ(st.name)}" class="relative w-full h-full object-contain" /></div>
-          <div class="absolute inset-x-0 bottom-0 h-[58px] bg-white flex items-center gap-2.5 px-3"><img src="${attrQ(st.image)}" class="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0" /><span class="flex-1 min-w-0"><b class="block text-[14px] leading-tight text-bark line-clamp-1">${escQ(st.name)}</b><span class="block text-[13px] text-gray-500 line-clamp-1">${ln.n ? ln.n + ' món đang bán' : escQ(st.slogan || 'Đang mở cửa')}</span></span><span class="shrink-0 bg-gac text-white rounded-full px-4 py-2 text-[14px] font-extrabold">Xem quán ›</span></div></div>`; }
+        if (it.type === 'store') { const st = it.st, ln = spotLine(st), im = attrQ(st.cover || st.image); return `<div class="sp-slide${on}"${ad} onclick="state.viewStoreId='${st.id}'; render();"><div class="absolute inset-x-0 top-0 h-[190px] overflow-hidden bg-bark-deep"><img loading="lazy" decoding="async" src="${im}" alt="" class="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-80" /><img loading="lazy" decoding="async" src="${im}" alt="${attrQ(st.name)}" class="relative w-full h-full object-contain" /></div>
+          <div class="absolute inset-x-0 bottom-0 h-[58px] bg-white flex items-center gap-2.5 px-3"><img loading="lazy" decoding="async" src="${attrQ(st.image)}" class="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0" /><span class="flex-1 min-w-0"><b class="block text-[14px] leading-tight text-bark line-clamp-1">${escQ(st.name)}</b><span class="block text-[13px] text-gray-500 line-clamp-1">${ln.n ? ln.n + ' món đang bán' : escQ(st.slogan || 'Đang mở cửa')}</span></span><span class="shrink-0 bg-gac text-white rounded-full px-4 py-2 text-[14px] font-extrabold">Xem quán ›</span></div></div>`; }
         const f = it.f, st = it.st || {}, go = `state.viewStoreId='${f.storeId}'; render();`;
-        return `<div class="sp-slide${on}"${ad} onclick="${go}"><img src="${f.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/5"></div>${it.ad ? '' : tag('🔥 Bán chạy hôm nay', false)}
+        return `<div class="sp-slide${on}"${ad} onclick="${go}"><img loading="lazy" decoding="async" src="${f.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/5"></div>${it.ad ? '' : tag('🔥 Bán chạy hôm nay', false)}
           <div class="absolute left-4 right-[72px] bottom-4"><span class="block text-[13px] text-white/85 line-clamp-1">🏪 ${escQ(st.name || '')}</span><b class="block font-display text-[24px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><span class="font-extrabold text-[18px] text-nghe">${priceText(f)}</span></div><div class="absolute right-3 bottom-3 z-10">${plusHtml(f.id, true)}</div></div>`;
       }).join('');
       return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 id="spotTitle" class="font-extrabold text-[17px] leading-snug min-h-[46px] flex items-center">${paid ? '😋 ' + escQ(t0) : '🔥 Món bán chạy hôm nay'}</h3></div>
@@ -1550,7 +1641,6 @@
       document.querySelectorAll('.sp-slide').forEach((el, k) => el.classList.toggle('on', k === i));
       document.querySelectorAll('[data-spdot]').forEach((el, k) => { el.classList.toggle('w-6', k === i); el.classList.toggle('bg-gac', k === i); el.classList.toggle('w-2', k !== i); el.classList.toggle('bg-gray-300', k !== i); });
     }
-    function spotGo(i) { spotPause = Date.now() + 9000; spotShow(i); }
     setInterval(() => { if (document.hidden || Date.now() < spotPause || spotN < 2 || !document.querySelector('[data-spot]') || state.activeTab !== 'orders') return; spotShow((spotIdx + 1) % spotN); }, 5000);
     document.addEventListener('touchstart', e => { if (e.target && e.target.closest && e.target.closest('[data-spot]')) spotPause = Date.now() + 9000; }, { capture: true, passive: true });
     // Màn "chưa có cửa hàng": cho chủ quán thấy nỗi đau khi bán không app và cái được khi có app
@@ -1621,11 +1711,6 @@
     // ===== NHÃN GHI CHÚ CỦA MÓN =====
     const noteChip = n => n ? `<span class="self-start inline-block max-w-full truncate bg-rose-100 text-rose-700 text-[13px] font-bold px-2 py-0.5 rounded-lg">${String(n).replace(/[<>]/g, '')}</span>` : '';
     const foodNote = id => (state.foods.find(f => f.id === id) || {}).note || '';
-    function setFoodNote(id, v) {
-      const f = state.foods.find(x => x.id === id); if (!f) return;
-      f.note = String(v || '').trim(); saveState(); render();
-      if (supabaseClient) supabaseClient.from('foods').update({ note: f.note }).eq('id', id).then(({ error }) => { if (error) showToast('Chưa lưu được nhãn (đã chạy SQL chưa?): ' + error.message); else showToast('Đã lưu nhãn ghi chú.'); });
-    }
 
     // ===== ĐƠN NHÓM: nhiều người, nhiều quán, một giỏ chung chia sẻ bằng link / QR =====
     // Mỗi người chọn món như bình thường. Món của mình tự đồng bộ lên nhóm, ai có link cũng thấy món của cả nhóm.
@@ -1811,7 +1896,7 @@
       const g = state.group; if (!g || !g.isHost) return '';
       return `<div class="fixed inset-0 z-[60] bg-black/60 flex items-end justify-center" onclick="state.groupQR=false; render();"><div class="bg-white w-full max-w-md rounded-t-3xl p-4 space-y-3 shadow-2xl" onclick="event.stopPropagation()">
         <div class="flex items-center justify-between"><h3 class="font-extrabold text-[16px]">Mã QR của nhóm</h3><button onclick="state.groupQR=false; render();" class="w-9 h-9 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
-        <div class="text-center space-y-1.5"><img src="${qrImg(groupLink(g.id), 280)}" class="w-56 h-56 mx-auto border rounded-2xl p-1 bg-white" /><p class="font-extrabold text-[16px]">${escQ(g.title)}</p><p class="text-[13px] text-gray-500">Bạn bè quét mã này là vào đúng nhóm để chọn món.</p></div></div></div>`;
+        <div class="text-center space-y-1.5"><img loading="lazy" decoding="async" src="${qrImg(groupLink(g.id), 280)}" class="w-56 h-56 mx-auto border rounded-2xl p-1 bg-white" /><p class="font-extrabold text-[16px]">${escQ(g.title)}</p><p class="text-[13px] text-gray-500">Bạn bè quét mã này là vào đúng nhóm để chọn món.</p></div></div></div>`;
     }
     function groupViewHtml() {
       const g = state.group, back = '<button onclick="state.groupView=false; render();" class="h-10 px-3 rounded-full bg-white/15 text-white text-[14px] font-bold">‹ Thêm món</button>';
@@ -1853,7 +1938,7 @@
         const st = state.stores.find(x => x.id === d.storeId) || { name: 'Quán', phone: '' }, name = (g.items.find(i => i.storeId === d.storeId) || {}).storeName || st.name, content = depContent(g.title, d.orderId);
         const chip = d.paid ? '<span class="shrink-0 text-[13px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800">✅ Quán đã nhận cọc</span>' : '<span class="shrink-0 text-[13px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">⏳ Chờ quán xác nhận</span>';
         const line = (k, v, copy) => `<div class="flex items-center justify-between gap-2"><span class="text-gray-500 shrink-0">${k}</span><span class="font-bold text-gray-900 text-right break-all">${escQ(v)}</span>${copy ? `<button data-t="${attrQ(copy)}" onclick="copyTxt(this.dataset.t)" class="shrink-0 text-[13px] font-bold text-emerald-700 px-1">Chép</button>` : ''}</div>`;
-        const pay = d.paid || !g.isHost ? '' : bankOk(st) ? `<div class="text-center"><img src="${attrQ(vietQrUrl(st, d.amount, content))}" alt="Mã QR chuyển khoản" class="w-60 h-60 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-500 mt-1">Quét bằng app ngân hàng: số tiền và nội dung điền sẵn.</p></div>
+        const pay = d.paid || !g.isHost ? '' : bankOk(st) ? `<div class="text-center"><img loading="lazy" decoding="async" src="${attrQ(vietQrUrl(st, d.amount, content))}" alt="Mã QR chuyển khoản" class="w-60 h-60 object-contain mx-auto border rounded-2xl bg-white" onerror="this.style.display='none'" /><p class="text-[13px] text-gray-500 mt-1">Quét bằng app ngân hàng: số tiền và nội dung điền sẵn.</p></div>
             <div class="bg-gray-50 rounded-xl p-2.5 space-y-1.5 text-[13px]">${line('Ngân hàng', bankName(st.bankCode))}${line('Số tài khoản', st.bankNo, st.bankNo)}${line('Chủ tài khoản', st.bankHolder)}${line('Số tiền', money(d.amount), String(d.amount))}${line('Nội dung', content, content)}</div>`
           : `<div class="bg-rose-50 border border-rose-200 rounded-xl p-2.5 text-[13px] text-rose-800">Quán chưa cập nhật số tài khoản ngân hàng. Hãy gọi quán để chuyển khoản <b>${money(d.amount)}</b> với nội dung <b>${escQ(content)}</b>.${st.phone ? ` <a href="tel:${escQ(st.phone)}" class="font-extrabold underline">📞 ${escQ(st.phone)}</a>` : ''}</div>`;
         return `<div class="bg-white rounded-2xl border ${d.paid ? 'border-green-200' : 'border-amber-300'} p-3 space-y-2 shadow-sm"><div class="flex items-start justify-between gap-2"><div class="min-w-0"><b class="text-[15px] block truncate">🏪 ${escQ(name)}</b><span class="text-[13px] text-gray-500">Mã đơn ${escQ(d.orderId)} · tổng ${money(d.total)}</span></div>${chip}</div>
@@ -1974,7 +2059,7 @@
       return `<div class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2 shadow-sm text-[13px]">
         <h3 class="font-extrabold text-sm text-gray-800">📱 Mã QR của quán bạn</h3>
         <p class="text-gray-500">Khách quét mã này sẽ vào thẳng trang của quán <b>${s.name}</b>, chỉ thấy món của quán bạn. Chọn món, nhập số điện thoại và địa chỉ rồi bấm Hoàn thành đơn. Không cần đăng nhập.</p>
-        ${location.protocol === 'file:' ? '<p class="text-rose-600 font-bold">⚠️ App đang mở từ file trên máy nên mã QR chưa dùng được. Hãy mở app từ địa chỉ web.</p>' : `<div class="text-center"><img src="${qrImg(link, 220)}" class="w-40 h-40 border rounded-lg inline-block" /></div>
+        ${location.protocol === 'file:' ? '<p class="text-rose-600 font-bold">⚠️ App đang mở từ file trên máy nên mã QR chưa dùng được. Hãy mở app từ địa chỉ web.</p>' : `<div class="text-center"><img loading="lazy" decoding="async" src="${qrImg(link, 220)}" class="w-40 h-40 border rounded-lg inline-block" /></div>
         <div class="flex gap-2"><button onclick="printStoreQR()" class="flex-1 bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">🖨️ In mã QR</button><button onclick="copyStoreLink()" class="flex-1 border border-emerald-700 text-emerald-800 py-2.5 rounded-xl font-bold">🔗 Sao chép link</button></div>`}
       </div>`;
     }
@@ -1985,7 +2070,7 @@
         <p class="text-gray-500">Khách quét mã QR ở bàn để gọi món, gọi nhân viên hoặc yêu cầu thanh toán. Yêu cầu hiện ngay ở đầu trang này kèm tiếng báo.</p>
         ${location.protocol === 'file:' ? '<p class="text-rose-600 font-bold">⚠️ App đang mở từ file trên máy nên mã QR chưa dùng được. Hãy đưa app lên một địa chỉ web rồi mở từ địa chỉ đó để in mã.</p>' : ''}
         <label class="block space-y-1"><span class="font-bold">Số bàn của quán</span><input type="number" min="0" max="100" value="${n || ''}" onchange="setTableCount(this.value)" class="field" placeholder="VD: 10" /></label>
-        ${n ? `<div class="flex gap-3 overflow-x-auto no-scrollbar py-1" data-scroll="qr">${Array.from({ length: Math.min(n, 4) }, (_, i) => `<div class="shrink-0 text-center"><img src="${qrImg(tableLink(s.id, i + 1), 160)}" class="w-28 h-28 border rounded-lg" /><b>Bàn ${i + 1}</b></div>`).join('')}${n > 4 ? `<div class="shrink-0 self-center text-gray-500">+${n - 4} bàn nữa</div>` : ''}</div>
+        ${n ? `<div class="flex gap-3 overflow-x-auto no-scrollbar py-1" data-scroll="qr">${Array.from({ length: Math.min(n, 4) }, (_, i) => `<div class="shrink-0 text-center"><img loading="lazy" decoding="async" src="${qrImg(tableLink(s.id, i + 1), 160)}" class="w-28 h-28 border rounded-lg" /><b>Bàn ${i + 1}</b></div>`).join('')}${n > 4 ? `<div class="shrink-0 self-center text-gray-500">+${n - 4} bàn nữa</div>` : ''}</div>
         <button onclick="printTableQRs()" class="w-full bg-emerald-700 text-white py-2.5 rounded-xl font-extrabold">🖨️ In mã QR các bàn</button>` : ''}
         <button onclick="copyStoreLink()" class="w-full border border-emerald-700 text-emerald-800 py-2.5 rounded-xl font-bold">🔗 Sao chép link riêng của quán</button>
       </div>`;
@@ -2004,25 +2089,6 @@
     const sizesPreviewText = t => { const a = parseSizes(t); return a.length ? 'Hiển thị: ' + a.map(x => x.name + ' ' + money(x.price)).join(' · ') : ''; };
     function updateSizesPreview() { const el = document.getElementById('sizesPreview'); if (el) el.textContent = sizesPreviewText(state.foodForm.sizes); }
     const priceText = f => (f.sizes && f.sizes.length ? 'từ ' : '') + money(f.price);
-    function setFoodSizes(id, text) {
-      const f = state.foods.find(x => x.id === id); if (!f) return;
-      const t = String(text || '').trim(), sizes = parseSizes(t);
-      if (t && !sizes.length) return showToast('Size nhập chưa đúng. Ví dụ: M 25, L 30');
-      f.sizes = sizes; if (sizes.length) f.price = Math.min(...sizes.map(x => x.price));
-      saveState(); render();
-      if (supabaseClient) supabaseClient.from('foods').update(sizes.length ? { sizes, price: f.price } : { sizes }).eq('id', id)
-        .then(({ error }) => { if (error) showToast('Chưa lưu được size (đã chạy SQL chưa?): ' + error.message); else showToast('Đã lưu size và giá.'); });
-    }
-    function addSized(foodId, idx) {
-      const food = state.foods.find(f => f.id === foodId), size = food && food.sizes[idx]; if (!size) return;
-      const store = state.stores.find(s => s.id === food.storeId);
-      if (!store || !store.isOpen) { state.sizePick = ''; showToast('Quán hiện đang tạm nghỉ.'); return; }
-      if (!food.inStock) { state.sizePick = ''; showToast('Món này đã hết.'); return; }
-      const cartKey = food.id + '|' + size.name, ex = state.cart.find(i => i.cartKey === cartKey);
-      if (ex) ex.quantity += 1;
-      else state.cart.push({ cartKey, foodId: food.id, storeId: food.storeId, storeName: store.name, name: food.name + ' (' + size.name + ')', image: food.image, unitPrice: size.price, quantity: 1 });
-      state.sizePick = ''; saveState(); showToast('Đã thêm ' + food.name + ' (' + size.name + ') vào giỏ!');
-    }
     function sizePickerHtml() { return detailSheetHtml(); }
 
     // ===== BANNER ĐẦU TRANG CHỦ + NÚT GIỎ HÀNG TRÊN ĐẦU TRANG =====
@@ -2079,10 +2145,6 @@
       state.showInstallHelp = true; render();
     }
     function dismissInstall() { state.installDismissed = true; try { localStorage.setItem('fg_install_dismiss', String(Date.now())); } catch {} render(); }
-    function installBannerHtml() {
-      if (isStandalone() || state.installDismissed) return '';
-      return `<div class="flex items-center gap-2 rounded-2xl bg-white border border-orange-200 shadow-sm pl-3 pr-1 py-1.5"><span class="text-2xl">📲</span><p class="flex-1 text-[13px] font-bold text-gray-800 leading-tight">Thêm ShopFood ra màn hình chính để mở nhanh</p><button onclick="installApp()" class="bg-emerald-700 text-white px-3 rounded-full text-[13px] font-extrabold shrink-0">Thêm</button><button onclick="dismissInstall()" class="text-gray-400 font-bold px-1" aria-label="Để sau">✕</button></div>`;
-    }
     function supportCardHtml() {
       if (!PLATFORM_ZALO) return '';
       const p = PLATFORM_ZALO, shown = p.replace(/^(\d{4})(\d{3})(\d+)$/, '$1 $2 $3');
@@ -2229,7 +2291,7 @@
         <div class="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-gray-300 shrink-0"></div>
         <div data-scroll="detail" class="overflow-y-auto px-4 pb-2 space-y-3">
           <div class="flex items-center justify-between"><p class="text-[13px] text-gray-400 font-bold">Chi tiết món</p><button onclick="state.sizePick=''; render();" class="w-9 h-9 rounded-full bg-emerald-700 text-white font-black">✕</button></div>
-          <div class="flex gap-3 items-center"><img src="${f.image}" class="w-16 h-20 rounded-lg object-cover shrink-0" /><div class="min-w-0"><h3 class="font-extrabold text-[16px] leading-tight">${f.name}</h3>${noteChip(f.note)}<p class="text-[22px] font-black text-emerald-700 mt-1">${money(unit)}</p></div></div>
+          <div class="flex gap-3 items-center"><img loading="lazy" decoding="async" src="${f.image}" class="w-16 h-20 rounded-lg object-cover shrink-0" /><div class="min-w-0"><h3 class="font-extrabold text-[16px] leading-tight">${f.name}</h3>${noteChip(f.note)}<p class="text-[22px] font-black text-emerald-700 mt-1">${money(unit)}</p></div></div>
           ${sizes.length ? `<div class="space-y-1.5">${lab('Size')}<div class="flex flex-wrap gap-2">${sizes.map((z, i) => `<button onclick="state.draft.size=${i}; render();" class="px-4 rounded-full border-2 text-[14px] font-bold ${d.size === i ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-gray-200 text-gray-700'}">${z.name} · ${money(z.price)}</button>`).join('')}</div></div>` : ''}
           ${sel.length ? `<div class="grid grid-cols-2 gap-3">${sel.map(({ g, gi }) => `<div class="space-y-1 min-w-0">${lab(g.name)}<select onchange="pickChoice(${gi}, this.selectedIndex)" class="field">${g.choices.map((c, ci) => `<option ${(d.sel[gi] || [])[0] === ci ? 'selected' : ''}>${c.name}</option>`).join('')}</select></div>`).join('')}</div>` : ''}
           ${lst.map(({ g, gi }) => `<div class="space-y-2">${lab(g.name + (g.type === 'multi' ? ' (chọn nhiều)' : ''))}${g.choices.map((c, ci) => row(gi, g, ci, c)).join('')}</div>`).join('')}
@@ -2527,7 +2589,7 @@
       return `<div class="fixed inset-0 z-50 bg-black/60 flex items-end justify-center" onclick="state.foodEdit=null; render();"><div class="bg-white w-full max-w-md rounded-t-3xl shadow-2xl flex flex-col" style="max-height:94vh" onclick="event.stopPropagation()">
         <div class="flex items-center justify-between px-4 pt-3 pb-2 border-b shrink-0"><h3 class="font-extrabold text-[17px]">✏️ Sửa món</h3><button onclick="state.foodEdit=null; render();" class="w-10 h-10 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
         <div data-scroll="foodedit" class="overflow-y-auto px-4 py-3 space-y-3">
-          <div class="flex items-center gap-3"><img src="${attrQ(e.image)}" class="w-24 h-24 rounded-2xl object-cover border bg-gray-100 shrink-0" /><div class="flex-1 space-y-1"><span class="${lab}">Hình ảnh món</span><input type="file" accept="image/*" onchange="handleImageUpload(this, 500, url => state.foodEdit.image = url)" class="block w-full text-[13px] text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[13px] file:font-semibold file:bg-emerald-50 file:text-emerald-700" />${pasteBoxHtml()}</div></div>
+          <div class="flex items-center gap-3"><img loading="lazy" decoding="async" src="${attrQ(e.image)}" class="w-24 h-24 rounded-2xl object-cover border bg-gray-100 shrink-0" /><div class="flex-1 space-y-1"><span class="${lab}">Hình ảnh món</span><input type="file" accept="image/*" onchange="handleImageUpload(this, 500, url => state.foodEdit.image = url)" class="block w-full text-[13px] text-gray-500 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-[13px] file:font-semibold file:bg-emerald-50 file:text-emerald-700" />${pasteBoxHtml()}</div></div>
           <label class="block space-y-1"><span class="${lab}">Tên món *</span><input value="${attrQ(e.name)}" oninput="state.foodEdit.name=this.value;" maxlength="80" class="field" /></label>
           <label class="block space-y-1"><span class="${lab}">Giá bán *</span><div class="relative"><input id="editPrice" value="${attrQ(e.priceInput)}" ${editPriceInfo(e).locked ? 'disabled' : ''} oninput="state.foodEdit.priceInput=this.value; updateEditPricePreview();" onblur="state.foodEdit.priceInput=fmtPriceField(this.value); this.value=state.foodEdit.priceInput; updateEditPricePreview();" inputmode="numeric" class="field pr-12 text-[17px] font-bold ${editPriceInfo(e).locked ? 'bg-gray-100 text-gray-400' : ''}" placeholder="350" /><span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold pointer-events-none">đ</span></div>
             <p id="editPricePreview" class="text-[13px] font-bold ${parseShortPrice(e.priceInput) > 0 || editPriceInfo(e).locked ? 'text-green-700' : 'text-gray-500'}">${editPriceInfo(e).text}</p></label>
@@ -2564,33 +2626,6 @@
       showToast(store.isOpen ? 'Quán đã mở bán trở lại!' : 'Quán đã chuyển sang tạm nghỉ.');
     }
 
-    function initMap(containerId, onSelect) {
-      setTimeout(() => {
-        const el = document.getElementById(containerId);
-        if (!el) return;
-        if (activeMapInstance) { activeMapInstance.remove(); }
-        activeMapInstance = L.map(containerId).setView([15.1583, 108.3833], 15);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(activeMapInstance);
-        activeMapMarker = L.marker([15.1583, 108.3833], { draggable: true }).addTo(activeMapInstance);
-
-        function updatePos(lat, lng) {
-          fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
-            .then(res => res.json())
-            .then(data => {
-              onSelect(data.display_name || `Vị trí đã chọn (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-            }).catch(() => onSelect(`Vị trí đã chọn (${lat.toFixed(4)}, ${lng.toFixed(4)})`));
-        }
-
-        activeMapInstance.on('click', e => {
-          activeMapMarker.setLatLng(e.latlng);
-          updatePos(e.latlng.lat, e.latlng.lng);
-        });
-        activeMapMarker.on('dragend', () => {
-          const pos = activeMapMarker.getLatLng();
-          updatePos(pos.lat, pos.lng);
-        });
-      }, 100);
-    }
 
     function render() {
       if (state.groupCheckout && !state.showCheckout) groupCheckoutAbort();
@@ -2740,7 +2775,7 @@
           <div class="fixed inset-0 z-50 bg-black/60 flex items-end justify-center">
             <div class="bg-white w-full max-w-md rounded-t-2xl p-4 max-h-[85vh] overflow-y-auto shadow-2xl space-y-3" data-scroll="s1">
               <div class="flex justify-between items-center border-b pb-2"><div><h3 class="font-extrabold text-base">Giỏ hàng</h3><p class="text-[13px] text-gray-500">${cartGroups().length} quán · ${state.cart.reduce((a, i) => a + i.quantity, 0)} món</p></div><button onclick="state.showCart=false; render();" class="text-gray-400 font-bold">✕</button></div>
-              ${cartGroups().map(g => { const st = state.stores.find(x => x.id === g.storeId) || {}; return `<div class="border rounded-xl p-3 space-y-2"><div class="flex justify-between items-center"><b class="text-sm">🏪 ${g.storeName}</b><span class="text-[13px] text-gray-500">Tiền món ${money(g.subtotal)}</span></div>${g.items.map(i => `<div class="flex items-center gap-2"><img src="${i.image}" class="w-12 h-12 rounded-lg object-cover" /><div class="flex-1 min-w-0"><b class="text-[13px] line-clamp-1">${i.name}</b>${i.desc ? `<p class="text-[13px] text-gray-500 leading-snug">${String(i.desc).replace(/[<>]/g, '')}</p>` : ''}${noteChip(foodNote(i.foodId))}<p class="text-[13px] text-gray-500">${money(i.unitPrice)} × ${i.quantity} = <b class="text-emerald-700">${money(i.unitPrice * i.quantity)}</b></p></div><div class="flex items-center gap-2"><button onclick="changeQty('${i.cartKey}', -1)" class="w-11 h-11 rounded-full border font-bold">−</button><b class="text-[13px] min-w-[28px] text-center text-[15px]">${i.quantity}</b><button onclick="changeQty('${i.cartKey}', 1)" class="w-11 h-11 rounded-full bg-emerald-700 text-white font-bold">+</button></div></div>`).join('')}<div class="bg-amber-50 rounded-lg p-2 text-[13px] text-gray-600 space-y-0.5"><p><b>Giao hàng:</b> ${st.shipInfo || 'Hỏi quán khi đặt'}</p><p><b>Thanh toán:</b> ${st.payInfo || 'Thỏa thuận với quán'}</p></div></div>`; }).join('')}
+              ${cartGroups().map(g => { const st = state.stores.find(x => x.id === g.storeId) || {}; return `<div class="border rounded-xl p-3 space-y-2"><div class="flex justify-between items-center"><b class="text-sm">🏪 ${g.storeName}</b><span class="text-[13px] text-gray-500">Tiền món ${money(g.subtotal)}</span></div>${g.items.map(i => `<div class="flex items-center gap-2"><img loading="lazy" decoding="async" src="${i.image}" class="w-12 h-12 rounded-lg object-cover" /><div class="flex-1 min-w-0"><b class="text-[13px] line-clamp-1">${i.name}</b>${i.desc ? `<p class="text-[13px] text-gray-500 leading-snug">${String(i.desc).replace(/[<>]/g, '')}</p>` : ''}${noteChip(foodNote(i.foodId))}<p class="text-[13px] text-gray-500">${money(i.unitPrice)} × ${i.quantity} = <b class="text-emerald-700">${money(i.unitPrice * i.quantity)}</b></p></div><div class="flex items-center gap-2"><button onclick="changeQty('${i.cartKey}', -1)" class="w-11 h-11 rounded-full border font-bold">−</button><b class="text-[13px] min-w-[28px] text-center text-[15px]">${i.quantity}</b><button onclick="changeQty('${i.cartKey}', 1)" class="w-11 h-11 rounded-full bg-emerald-700 text-white font-bold">+</button></div></div>`).join('')}<div class="bg-amber-50 rounded-lg p-2 text-[13px] text-gray-600 space-y-0.5"><p><b>Giao hàng:</b> ${st.shipInfo || 'Hỏi quán khi đặt'}</p><p><b>Thanh toán:</b> ${st.payInfo || 'Thỏa thuận với quán'}</p></div></div>`; }).join('')}
               <div class="flex justify-between border-t pt-2 text-sm font-extrabold text-emerald-700"><span>Tạm tính</span><b>${money(t)}</b></div>
               <p class="text-[13px] text-gray-400">Giỏ có nhiều quán sẽ được tách thành mỗi quán một đơn riêng. Mỗi quán tự xác nhận và giao.</p>
               <div class="flex gap-2">
@@ -2827,7 +2862,7 @@
                   <input type="file" accept="image/*" onchange="handleImageUpload(this, 500, url => state.foodForm.image = url)" class="block w-full text-[13px] text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-[13px] file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" />
                 </label>
                 ${pasteBoxHtml()}
-                ${state.foodForm.image ? `<div class="relative"><img src="${state.foodForm.image}" class="w-full h-44 object-cover rounded-xl border" /><span class="absolute top-2 left-2 bg-emerald-700 text-white text-[13px] font-bold px-2 py-1 rounded-lg">✓ Ảnh sẽ được đăng</span><button type="button" onclick="state.foodForm.image=''; render();" class="absolute top-2 right-2 bg-white text-rose-600 text-[13px] font-bold px-2 py-1 rounded-lg shadow">Xóa ảnh</button></div>` : '<p class="text-[13px] text-gray-400">Chưa chọn ảnh. Nếu bỏ trống, app dùng ảnh mẫu.</p>'}
+                ${state.foodForm.image ? `<div class="relative"><img loading="lazy" decoding="async" src="${state.foodForm.image}" class="w-full h-44 object-cover rounded-xl border" /><span class="absolute top-2 left-2 bg-emerald-700 text-white text-[13px] font-bold px-2 py-1 rounded-lg">✓ Ảnh sẽ được đăng</span><button type="button" onclick="state.foodForm.image=''; render();" class="absolute top-2 right-2 bg-white text-rose-600 text-[13px] font-bold px-2 py-1 rounded-lg shadow">Xóa ảnh</button></div>` : '<p class="text-[13px] text-gray-400">Chưa chọn ảnh. Nếu bỏ trống, app dùng ảnh mẫu.</p>'}
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Danh mục</span><select onchange="state.foodForm.category=this.value" class="field">${catOptions(state.foodForm.category)}</select></label>
                 <label class="block space-y-1"><span class="text-[13px] font-bold">Tên món *</span><input value="${state.foodForm.name.replace(/"/g, '&quot;')}" oninput="state.foodForm.name=this.value;" class="field" placeholder="VD: Gà nướng" /></label>
                 <div class="space-y-1"><label class="block space-y-1"><span class="text-[13px] font-bold">Nhãn ghi chú (không bắt buộc)</span><input value="${(state.foodForm.note || '').replace(/"/g, '&quot;')}" oninput="state.foodForm.note=this.value;" maxlength="40" class="field" placeholder="VD: Đặt trước 7h sáng, Cay, Món mới" /></label>
