@@ -1,6 +1,6 @@
 // Service worker tối giản: ưu tiên mạng, chỉ lưu bản sao trang để mở được khi mất mạng.
 // Không đụng tới dữ liệu Supabase (khác tên miền) nên đơn hàng luôn là dữ liệu mới nhất.
-const CACHE = 'shopfood-v2';
+const CACHE = 'shopfood-v4';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
