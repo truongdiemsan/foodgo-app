@@ -39,7 +39,6 @@
     .lift { box-shadow: 0 2px 14px rgba(74, 31, 22, 0.09); }
     /* Khu vực quảng bá: khung hạng (đồng, bạc, vàng, bạch kim, kim cương) và hiệu ứng chuyển động */
     .pm-frame { padding: 2.5px; border-radius: 18px; background: linear-gradient(110deg, var(--c1), var(--c2), var(--c1)); background-size: 220% 100%; box-shadow: 0 8px 20px -8px var(--c1); }
-    .pm-anim { animation: adBorder 3.4s linear infinite; }
     .pm-shine { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); animation: adShine 3.6s ease-in-out infinite; pointer-events: none; }
     .pm-spark { position: absolute; color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.9); animation: adSpark 2.4s ease-in-out infinite; pointer-events: none; }
     .feat-h{height:172px}
@@ -50,7 +49,6 @@
     .sp-slide { display: none; position: absolute; inset: 0; cursor: pointer; }
     .sp-slide.on { display: block; animation: spIn .7s cubic-bezier(.2,.8,.2,1); }
     @keyframes spIn { from { opacity: 0; transform: translateX(26px) scale(1.03); } to { opacity: 1; transform: none; } }
-    @keyframes adBorder { from { background-position: 0% 50%; } to { background-position: 220% 50%; } }
     @keyframes adShine { 0% { transform: translateX(-140%) skewX(-18deg); } 55%, 100% { transform: translateX(380%) skewX(-18deg); } }
     @keyframes adSpark { 0%, 100% { opacity: 0; transform: scale(.4) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
     @keyframes adIn { from { opacity: 0; transform: translateY(16px) scale(.95); } to { opacity: 1; transform: none; } }
@@ -69,9 +67,8 @@
     nav button span:last-child { font-size: 13px; line-height: 1.15; text-align: center; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    .map-picker { height: 220px; width: 100%; border-radius: 1rem; z-index: 10; margin-top: 8px; }
   </style>
-  <meta name="app-version" content="2026-11-27-spot10">
+  <meta name="app-version" content="2026-11-27-speed">
   <meta name="color-scheme" content="dark">
   <style id="dark-theme">
     :root { color-scheme: dark; }
@@ -388,9 +385,12 @@
         .subscribe();
     }
 
+    // Bản lưu tạm trên máy chỉ giữ chữ, bỏ ảnh nặng (ảnh luôn tải lại từ Supabase). Nhờ vậy không bị đầy bộ nhớ và lưu nhanh.
+    const slimImg = v => (typeof v === 'string' && v.startsWith('data:') && v.length > 3000) ? '' : v;
+    const slimList = list => list.map(x => (x && (x.image || x.cover)) ? { ...x, image: slimImg(x.image), cover: slimImg(x.cover) } : x);
     function saveState() {
-      safeWrite(STORAGE.stores, state.stores);
-      safeWrite(STORAGE.foods, state.foods);
+      safeWrite(STORAGE.stores, slimList(state.stores));
+      safeWrite(STORAGE.foods, slimList(state.foods));
       safeWrite(STORAGE.cart, state.cart);
       safeWrite(STORAGE.orders, state.orders);
       safeWrite(STORAGE.favorites, state.favorites);
@@ -1405,8 +1405,10 @@
     ['touchstart', 'pointerdown', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('[data-scroll="feat"]')) featPauseUntil = Date.now() + 8000; }, { capture: true, passive: true }));
     // Dải "Quán quanh bạn": mỗi lần thấy 4 quán, tự trôi chậm từ trái sang phải. Chạm vào thì dừng 8 giây. Hết dải thì quay về đầu.
     let shopPos = 0, shopPause = 0, shopHold = 0;
-    function shopAuto() {
+    let shopLast = 0;
+    function shopAuto(ts) {
       requestAnimationFrame(shopAuto);
+      if (ts - shopLast < 33) return; const dt = Math.min(100, ts - shopLast || 16.7); shopLast = ts;   // chỉ chạy khoảng 30 lần mỗi giây
       if (document.hidden || Date.now() < shopPause || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
       if (state.activeTab !== 'home' || state.viewStoreId || state.showCart || state.showCheckout || state.sizePick || state.optEdit || state.showAuth) return;
       const el = document.querySelector('[data-scroll="stores"]'); if (!el) return;
@@ -1415,7 +1417,7 @@
       const now = Date.now(); if (now < shopHold) return;
       if (Math.abs(el.scrollLeft - shopPos) > 2) shopPos = el.scrollLeft;   // người dùng tự kéo: chạy tiếp từ chỗ đó
       if (el.scrollLeft >= max - 1) { shopHold = now + 1800; shopPos = 0; el.scrollTo({ left: 0, behavior: 'smooth' }); shopHold = now + 2800; return; }
-      shopPos = Math.min(max, shopPos + 0.4); el.scrollLeft = Math.round(shopPos);
+      shopPos = Math.min(max, shopPos + 0.4 * dt / 16.7); el.scrollLeft = Math.round(shopPos);
     }
     requestAnimationFrame(shopAuto);
     ['touchstart', 'pointerdown', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('[data-scroll="stores"]')) shopPause = Date.now() + 8000; }, { capture: true, passive: true }));
@@ -2178,7 +2180,6 @@
       }
       state.showInstallHelp = true; render();
     }
-    function dismissInstall() { state.installDismissed = true; try { localStorage.setItem('fg_install_dismiss', String(Date.now())); } catch {} render(); }
     function supportCardHtml() {
       if (!PLATFORM_ZALO) return '';
       const p = PLATFORM_ZALO, shown = p.replace(/^(\d{4})(\d{3})(\d+)$/, '$1 $2 $3');
@@ -2661,6 +2662,25 @@
     }
 
 
+    // ===== TỐI ƯU TỐC ĐỘ =====
+    // Ảnh lưu dạng base64 rất nặng (vài MB cả trang). Mỗi lần vẽ lại mà dán thẳng vào trang thì trình duyệt phải đọc và giải mã lại toàn bộ.
+    // Ở đây mỗi ảnh chỉ đổi sang dạng liên kết ngắn MỘT LẦN, các lần vẽ sau dùng lại. Ảnh gốc trong dữ liệu không bị thay đổi.
+    const blobCache = new Map();
+    function dataToBlobUrl(u) {
+      let b = blobCache.get(u); if (b) return b;
+      try {
+        const i = u.indexOf(','), mime = u.slice(5, u.indexOf(';')), bin = atob(u.slice(i + 1)), arr = new Uint8Array(bin.length);
+        for (let n = 0; n < bin.length; n++) arr[n] = bin.charCodeAt(n);
+        b = URL.createObjectURL(new Blob([arr], { type: mime }));
+      } catch { b = u; }
+      if (blobCache.size > 400) { const f = blobCache.keys().next().value; try { URL.revokeObjectURL(blobCache.get(f)); } catch {} blobCache.delete(f); }
+      blobCache.set(u, b); return b;
+    }
+    function speedHtml(h) {
+      if (h.indexOf('data:image/') >= 0) h = h.replace(/data:image\/[\w.+-]+;base64,[A-Za-z0-9+\/=]{600,}/g, dataToBlobUrl);
+      return h.replace(/<img (?![^>]*\bdecoding=)/g, '<img decoding="async" ').replace(/<img (?![^>]*\bloading=)/g, '<img loading="lazy" ');
+    }
+
     function render() {
       if (state.groupCheckout && !state.showCheckout) groupCheckoutAbort();
       const app = document.getElementById('app');
@@ -2945,7 +2965,7 @@
       const sc = {}; document.querySelectorAll('[data-scroll]').forEach(el => sc[el.dataset.scroll] = [el.scrollTop, el.scrollLeft]); const wy = window.scrollY;
       const ae = document.activeElement, idx = [...app.querySelectorAll('input,textarea')].indexOf(ae);
       const sig = idx >= 0 ? [ae.tagName, ae.type, ae.placeholder, ae.selectionStart, ae.selectionEnd] : null;
-      app.innerHTML = html;
+      app.innerHTML = speedHtml(html);
       document.querySelectorAll('[data-scroll]').forEach(el => { const v = sc[el.dataset.scroll]; if (v) { el.scrollTop = v[0]; el.scrollLeft = v[1]; } });
       window.scrollTo(0, wy);
       { const sp = document.querySelector('[data-scroll="s0"]'); if (sp) syncStoreBar(sp); }
