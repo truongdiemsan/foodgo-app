@@ -71,7 +71,7 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .map-picker { height: 220px; width: 100%; border-radius: 1rem; z-index: 10; margin-top: 8px; }
   </style>
-  <meta name="app-version" content="2026-11-27-adblock-fix">
+  <meta name="app-version" content="2026-11-27-adminlist">
   <meta name="color-scheme" content="dark">
   <style id="dark-theme">
     :root { color-scheme: dark; }
@@ -823,6 +823,35 @@
       showToast('Đã chép ' + copies.length + ' món sang "' + dst.name + '". Bấm "Quản lý quán này" để chỉnh sửa.');
     }
 
+    const vnNorm = t => foldCh(String(t || ''));
+    // Danh sách quán gọn: mỗi quán một dòng, bấm vào mới mở chi tiết. Có tìm kiếm và lọc để quản lý số lượng lớn.
+    function adminListHtml(rows) {
+      const q = vnNorm(state.adminQ || ''), flt = state.adminFilter || 'all';
+      const late = r => r.dues.filter(isLate).length, due = r => r.dues.length;
+      const cnt = { all: rows.length, late: rows.filter(r => late(r)).length, hidden: rows.filter(r => r.s.suspended).length };
+      const list = rows.filter(r => (flt === 'all' || (flt === 'late' && late(r)) || (flt === 'hidden' && r.s.suspended)) && (!q || vnNorm(r.s.name + ' ' + (r.s.phone || '')).includes(q)));
+      const chip = (k, t) => `<button onclick="state.adminFilter='${k}'; render();" class="shrink-0 px-3 h-8 rounded-full border text-[13px] font-bold ${flt === k ? 'bg-nghe text-bark border-nghe' : 'bg-white text-gray-700'}">${t} ${cnt[k]}</button>`;
+      const row = r => {
+        const open = state.adminOpen === r.s.id, l = late(r);
+        const head = `<button onclick="state.adminOpen=${open ? 'null' : `'${r.s.id}'`}; render();" class="w-full flex items-center gap-2 px-3 h-11 text-left">
+          <span class="w-2 h-2 rounded-full shrink-0 ${r.s.suspended ? 'bg-gray-400' : r.s.isOpen ? 'bg-green-500' : 'bg-amber-400'}"></span>
+          <b class="flex-1 min-w-0 truncate text-[14px]">${escQ(r.s.name)}</b>
+          ${l ? `<span class="shrink-0 text-[12px] font-bold text-rose-600">Quá hạn ${l}</span>` : due(r) ? `<span class="shrink-0 text-[12px] font-bold text-amber-700">Chờ thu</span>` : ''}
+          ${r.s.suspended ? '<span class="shrink-0 text-[12px] text-gray-500">Ẩn</span>' : ''}
+          <span class="shrink-0 text-[12px] text-gray-500">${r.n} đơn</span><span class="shrink-0 text-gray-400 text-[12px]">${open ? '▲' : '▼'}</span></button>`;
+        if (!open) return `<div class="bg-white rounded-xl border shadow-sm">${head}</div>`;
+        return `<div class="bg-white rounded-xl border-2 border-nghe shadow-sm">${head}<div class="px-3 pb-3 space-y-2 text-[13px]">
+          <p class="text-gray-500">SĐT: ${escQ(r.s.phone || '')} · ${r.n} đơn tháng này${r.s.suspended ? ' · <b class="text-rose-600">đang ẩn</b>' : ''}</p>
+          ${r.dues.map(d => `<div class="flex justify-between items-center gap-2"><span class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${money(d.fee)} (hạn ${d.due.toLocaleDateString('vi-VN')})</span><button onclick="markPaid('${r.s.id}','${d.ym}',${d.fee})" class="shrink-0 bg-emerald-700 text-white px-2 py-1 rounded-lg text-[13px] font-bold">Đã thu</button></div>`).join('')}
+          <div class="flex flex-wrap items-center gap-2"><button onclick="manageStore('${r.s.id}')" class="bg-emerald-700 text-white px-3 h-9 rounded-lg text-[13px] font-bold">🛠️ Quản lý</button><button onclick="openCopyMenu('${r.s.id}')" class="bg-white border border-emerald-700 text-emerald-800 px-3 h-9 rounded-lg text-[13px] font-bold">📋 Sao chép thực đơn</button>
+          <button onclick="setSuspended('${r.s.id}', ${!r.s.suspended})" class="px-2 h-9 text-[13px] font-bold ${r.s.suspended ? 'text-emerald-700' : 'text-rose-600'}">${r.s.suspended ? 'Mở lại quán' : 'Tạm ẩn quán'}</button><button onclick="deleteStore('${r.s.id}')" class="px-2 h-9 text-[13px] font-bold text-rose-600">🗑 Xóa</button></div></div></div>`;
+      };
+      return `<div class="space-y-2">
+        <input value="${escQ(state.adminQ || '')}" oninput="state.adminQ=this.value; render(); const i=document.getElementById('adminQ'); if(i){i.focus(); i.setSelectionRange(i.value.length,i.value.length);}" id="adminQ" placeholder="Tìm quán theo tên hoặc số điện thoại" class="field" />
+        <div class="flex gap-2 overflow-x-auto no-scrollbar">${chip('all', 'Tất cả')}${chip('late', 'Quá hạn')}${chip('hidden', 'Đang ẩn')}</div>
+        ${list.length ? list.map(row).join('') : '<p class="text-center text-[13px] text-gray-500 py-6">Không có quán phù hợp.</p>'}</div>`;
+    }
+
     function adminHtml() {
       const cur = ymOf(Date.now());
       const rows = state.stores.map(s => ({ s, n: storeMonths(s.id)[cur] || 0, dues: feeDue(s.id).filter(d => !d.paid) })).sort((a, b) => b.dues.filter(isLate).length - a.dues.filter(isLate).length);
@@ -832,11 +861,7 @@
           <p class="text-sm font-black">${rows.length} quán · phí tạm tính tháng này ${money(rows.reduce((a, r) => a + feeFor(r.n), 0))}</p>
           <button onclick="hideOverdue()" class="mt-2 bg-amber-400 text-emerald-950 px-3 py-1.5 rounded-lg text-[13px] font-extrabold">Ẩn các quán quá hạn</button></div>
         ${adminPromoHtml()}
-        ${rows.map(r => `<div class="bg-white rounded-2xl border p-3 text-[13px] space-y-1.5 shadow-sm">
-          <div class="flex justify-between"><b>${r.s.name}</b><span class="text-gray-500">${r.n} đơn tháng này</span></div>
-          <p class="text-gray-500">SĐT: ${r.s.phone}${r.s.suspended ? ' · <b class="text-rose-600">đang ẩn</b>' : ''}</p>
-          ${r.dues.map(d => `<div class="flex justify-between items-center"><span class="font-bold ${isLate(d) ? 'text-rose-600' : 'text-amber-700'}">Tháng ${d.ym}: ${money(d.fee)} (hạn ${d.due.toLocaleDateString('vi-VN')})</span><button onclick="markPaid('${r.s.id}','${d.ym}',${d.fee})" class="bg-emerald-700 text-white px-2 py-1 rounded-lg text-[13px] font-bold">Đã thu</button></div>`).join('')}
-          <div class="flex flex-wrap items-center gap-3 pt-1"><button onclick="manageStore('${r.s.id}')" class="bg-emerald-700 text-white px-3 rounded-lg text-[13px] font-bold">🛠️ Quản lý quán này</button><button onclick="openCopyMenu('${r.s.id}')" class="bg-white border border-emerald-700 text-emerald-800 px-3 rounded-lg text-[13px] font-bold">📋 Sao chép thực đơn</button><button onclick="setSuspended('${r.s.id}', ${!r.s.suspended})" class="text-[13px] font-bold ${r.s.suspended ? 'text-emerald-700' : 'text-rose-600'}">${r.s.suspended ? 'Mở lại quán' : 'Tạm ẩn quán'}</button><button onclick="deleteStore('${r.s.id}')" class="text-[13px] font-bold text-rose-600">🗑 Xóa quán</button></div></div>`).join('')}
+        ${adminListHtml(rows)}
       </div>`;
     }
 
