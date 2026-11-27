@@ -1577,10 +1577,14 @@
     // Đầu tab Đơn hàng: tiêu đề + một chip bên phải (điểm hoặc Đăng nhập) + một dòng gợi ý nhỏ
     function ordersHeadHtml() {
       const n = state.orders.filter(o => !o.customerId || (state.user && o.customerId === state.user.id)).length;
-      const right = hasAccount() ? `<span class="shrink-0 text-[13px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</span>`
-        : `<button onclick="state.showAuth=true; render();" class="shrink-0 h-8 px-3.5 rounded-full bg-bark text-nghe text-[13px] font-extrabold">Đăng nhập</button>`;
-      const hint = hasAccount() ? '' : `<p class="text-[13px] text-gray-500 -mt-1">${n ? 'Máy này đang lưu ' + n + ' đơn. Đăng nhập để không mất lịch sử và tích điểm.' : 'Đăng nhập để giữ lịch sử đơn và tích điểm.'}</p>`;
-      return `<div class="flex items-center justify-between gap-2"><h2 class="font-extrabold text-[17px]">Đơn hàng của tôi</h2>${right}</div>${hint}`;
+      const logged = hasAccount();
+      const title = logged ? '⭐ ' + myPoints() + ' điểm · ' + tierOf(myPoints()) : 'Đăng nhập để giữ đơn, tích điểm';
+      const sub = !logged && n ? 'Máy này đang lưu ' + n + ' đơn. Mỗi 1.000đ được 1 điểm.' : 'Mỗi 1.000đ được 1 điểm.';
+      const btn = logged ? '' : `<button onclick="state.showAuth=true; render();" class="shrink-0 px-5 py-3 rounded-xl bg-nghe text-bark text-[15px] font-extrabold active:scale-95 transition">Đăng nhập</button>`;
+      return `<h2 class="font-extrabold text-[17px]">Đơn hàng của tôi</h2>
+        <div class="flex items-center justify-between gap-3 bg-bark rounded-2xl px-4 py-3.5 shadow-md">
+          <div class="min-w-0"><p class="text-nghe font-extrabold text-[15px] leading-snug">${title}</p><p class="text-white/80 text-[13px] mt-0.5 leading-snug">${sub}</p></div>${btn}
+        </div>`;
     }
     function recentDishes() {   // món khách từng đặt trên máy này (mới nhất trước), chỉ lấy món còn bán
       const seen = new Set(), out = [];
