@@ -71,7 +71,7 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .map-picker { height: 220px; width: 100%; border-radius: 1rem; z-index: 10; margin-top: 8px; }
   </style>
-  <meta name="app-version" content="2026-11-27-adminqr">
+  <meta name="app-version" content="2026-11-27-spot10">
   <meta name="color-scheme" content="dark">
   <style id="dark-theme">
     :root { color-scheme: dark; }
@@ -1131,10 +1131,10 @@
     const PROMO_SLOTS = {};
     FOOD_TIERS.forEach(t => PROMO_SLOTS[t.k] = { ...t, kind: 'food' });
     RANK_BASE.forEach((b, n) => PROMO_SLOTS['q' + (n + 1)] = { k: 'q' + (n + 1), icon: n < 3 ? ['🥇', '🥈', '🥉'][n] : '🏪', name: 'Quán số ' + (n + 1), kind: 'store', rank: n + 1, base: b, where: 'Quán đứng vị trí số ' + (n + 1) + ' trong "Quán quanh bạn", có huy hiệu số ' + (n + 1) + ' và vòng sáng.' });
-    // Khu vực "Nổi bật hôm nay" ở tab Đơn hàng (tối đa 5 vị trí, chạy lần lượt): món lớn hoặc banner quán. Admin tự thêm / bỏ, hoặc chủ quán mua gói.
+    // Khu vực "Nổi bật hôm nay" ở tab Đơn hàng (tối đa 10 vị trí, chạy lần lượt): món lớn hoặc banner quán. Admin tự thêm / bỏ, hoặc chủ quán mua gói.
     PROMO_SLOTS.od_food = { k: 'od_food', icon: '📋', name: 'Tab Đơn hàng: món', kind: 'food', ord: true, base: 149000, where: 'Món hiện thật lớn ở tab Đơn hàng, chạy lần lượt cùng các món khác.' };
     PROMO_SLOTS.od_store = { k: 'od_store', icon: '🏪', name: 'Tab Đơn hàng: banner quán', kind: 'banner', ord: true, base: 249000, where: 'Banner quán lớn ở tab Đơn hàng, chạy lần lượt cùng các món khác.' };
-    const SPOT_MAX = 5;
+    const SPOT_MAX = 10;
     const LEGACY_SLOT = { gold: 'vang', silver: 'bac', strip: 'q1' };   // gói cũ tự đổi sang hạng mới
     const normSlot = sl => LEGACY_SLOT[sl] || sl;
     const slotInfo = sl => PROMO_SLOTS[normSlot(sl)] || PROMO_SLOTS.dong;
@@ -1271,7 +1271,7 @@
     }
     function rerunPromo(id) {
       const r = (state.promoReport || []).find(x => x.promoId === id); if (!r) return;
-      state.promoForm = { storeId: r.storeId, slot: r.slot, foodId: r.foodId || '', days: 7, price: '', note: '' }; render();
+      state.promoForm = { storeId: r.storeId, slot: r.slot, foodId: r.foodId || '', days: 7, price: '', note: '' }; state.promoFormOpen = true; render();
       const el = document.getElementById('promoFormTop'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -1313,22 +1313,23 @@
           ${admin ? (live ? `<button onclick="extendPromo('${r.promoId}', 7)" class="h-10 px-3 rounded-xl bg-emerald-700 text-white font-extrabold">+7 ngày</button><button onclick="endPromo('${r.promoId}')" class="h-10 px-3 rounded-xl border border-gray-300 text-gray-700 font-bold">Kết thúc</button>` : `<button onclick="rerunPromo('${r.promoId}')" class="h-10 px-3 rounded-xl bg-emerald-700 text-white font-extrabold">Chạy lại</button>`) + `<button onclick="deletePromo('${r.promoId}')" class="h-10 px-2 text-rose-600 font-bold">🗑 Xóa</button>` : ''}</div></div>`;
     }
     function promoFormHtml() {
-      const f = promoForm(), foods = state.foods.filter(x => x.storeId === f.storeId), sug = promoSuggest(f.slot, +f.days || 7), pv = parseShortPrice(f.price);
-      return `<div id="promoFormTop" class="bg-white rounded-2xl border border-gray-100 p-3 space-y-2.5 shadow-sm text-[13px]"><h3 class="font-extrabold text-[14px] text-gray-900">Tạo gói quảng bá mới</h3>
-        <label class="block space-y-1"><span class="font-bold">Quán</span><select class="field" onchange="pfSet('storeId', this.value)"><option value="">Chọn quán...</option>${state.stores.map(s => `<option value="${attrQ(s.id)}" ${s.id === f.storeId ? 'selected' : ''}>${escQ(s.name)}</option>`).join('')}</select></label>
-        <div class="space-y-1.5"><span class="font-bold">Quảng bá món ăn <span class="font-normal text-gray-500">(thấp đến cao, tối đa ${MAX_FOODS_PER_STORE} món mỗi quán)</span></span>
-          <div class="grid grid-cols-5 gap-1.5">${FOOD_TIERS.map(t => `<button onclick="pfSet('slot', '${t.k}')" class="rounded-xl border-2 py-2 px-0.5 text-center ${f.slot === t.k ? 'border-emerald-700 bg-emerald-50' : 'border-gray-200 bg-white'}"><span class="block text-xl leading-none">${t.icon}</span><b class="block text-[13px] mt-1 leading-tight">${t.name}</b></button>`).join('')}</div></div>
-        <div class="space-y-1.5"><span class="font-bold">Quảng bá quán <span class="font-normal text-gray-500">(vị trí trong Quán quanh bạn)</span></span>
-          <div class="grid grid-cols-5 gap-1.5">${Object.values(PROMO_SLOTS).filter(v => v.kind === 'store').map(v => { const o = activePromos().find(p => p.slot === v.k), on = f.slot === v.k; return `<button onclick="pfSet('slot', '${v.k}')" class="rounded-xl border-2 py-2 text-center ${on ? 'border-emerald-700 bg-emerald-50' : o ? 'border-gray-200 bg-gray-100 text-gray-400' : 'border-gray-200 bg-white'}"><b class="block text-[15px] leading-none">${v.rank}</b><span class="block text-[13px] mt-1 leading-tight">${o ? 'đã có' : 'Số ' + v.rank}</span></button>`; }).join('')}</div></div>
-        <div class="space-y-1.5"><span class="font-bold">Khu vực Nổi bật ở tab Đơn hàng <span class="font-normal text-gray-500">(tối đa ${SPOT_MAX}, ${activePromos().filter(p => slotInfo(p.slot).ord).length} đang chạy)</span></span>
-          <div class="grid grid-cols-2 gap-1.5">${['od_food', 'od_store'].map(k => `<button onclick="pfSet('slot', '${k}')" class="rounded-xl border-2 py-2.5 px-1 text-center ${f.slot === k ? 'border-emerald-700 bg-emerald-50' : 'border-gray-200 bg-white'}"><span class="block text-xl leading-none">${PROMO_SLOTS[k].icon}</span><b class="block text-[13px] mt-1">${k === 'od_food' ? 'Món lớn' : 'Banner quán'}</b></button>`).join('')}</div></div>
-        <p class="rounded-xl bg-gray-50 border border-gray-100 p-2.5 text-gray-600"><b class="text-gray-900">${slotInfo(f.slot).icon} ${slotInfo(f.slot).name}.</b> ${slotInfo(f.slot).where}</p>
-        ${slotInfo(f.slot).kind === 'food' ? `<label class="block space-y-1"><span class="font-bold">Món cần quảng bá</span><select class="field" onchange="pfSet('foodId', this.value)"><option value="">${f.storeId ? 'Chọn món...' : 'Hãy chọn quán trước'}</option>${foods.map(x => `<option value="${attrQ(x.id)}" ${x.id === f.foodId ? 'selected' : ''}>${escQ(x.name)} (${priceText(x).replace(/<[^>]*>/g, '')})</option>`).join('')}</select></label>` : ''}
-        <div class="grid grid-cols-2 gap-2"><label class="block space-y-1"><span class="font-bold">Thời gian</span><select class="field" onchange="pfSet('days', this.value)">${[7, 14, 30].map(d => `<option value="${d}" ${+f.days === d ? 'selected' : ''}>${d} ngày</option>`).join('')}</select></label>
-          <label class="block space-y-1"><span class="font-bold">Số tiền thu</span><input class="field" inputmode="numeric" value="${attrQ(f.price)}" oninput="pfPrice(this)" placeholder="VD: 199" /></label></div>
-        <p class="text-gray-500"><span id="pfPricePrev">${pv > 0 ? 'Thu: ' + money(pv) : 'Bỏ trống là dùng thử miễn phí'}</span> · Giá gợi ý ${money(sug)} <button onclick="pfSuggest()" class="text-emerald-700 font-bold underline">Dùng giá này</button></p>
-        <label class="block space-y-1"><span class="font-bold">Ghi chú (chỉ Admin thấy)</span><input class="field" value="${attrQ(f.note)}" oninput="promoForm().note=this.value" placeholder="VD: đã thu tiền mặt" /></label>
-        <button onclick="createPromo()" class="w-full bg-emerald-700 text-white py-3 rounded-xl font-extrabold">Bắt đầu quảng bá ngay</button></div>`;
+      const f = promoForm(), sl = slotInfo(f.slot), foods = state.foods.filter(x => x.storeId === f.storeId), sug = promoSuggest(f.slot, +f.days || 7), pv = parseShortPrice(f.price), live = activePromos();
+      const ordN = live.filter(p => slotInfo(p.slot).ord).length;
+      const opt = (k, label, dis) => `<option value="${k}" ${f.slot === k ? 'selected' : ''} ${dis ? 'disabled' : ''}>${label}${dis ? ' (không còn chỗ)' : ''}</option>`;
+      const slotSel = `<select class="field" onchange="pfSet('slot', this.value)">
+        <optgroup label="Món ở đầu trang chủ">${FOOD_TIERS.map(t => opt(t.k, t.icon + ' Hạng ' + t.name, false)).join('')}</optgroup>
+        <optgroup label="Quán trong mục Quán quanh bạn">${Object.values(PROMO_SLOTS).filter(v => v.kind === 'store').map(v => { const o = live.find(p => p.slot === v.k); return opt(v.k, 'Vị trí số ' + v.rank + (o ? ' · đang thuộc ' + ((state.stores.find(x => x.id === o.storeId) || {}).name || 'quán khác') : ''), !!o && f.slot !== v.k); }).join('')}</optgroup>
+        <optgroup label="Tab Đơn hàng (tối đa ${SPOT_MAX}, đang chạy ${ordN})">${opt('od_food', '📋 Món lớn', ordN >= SPOT_MAX)}${opt('od_store', '🏪 Banner quán', ordN >= SPOT_MAX)}</optgroup></select>`;
+      const lbl = t => `<span class="block font-bold text-gray-800 mb-1">${t}</span>`;
+      return `<div id="promoFormTop" class="bg-white rounded-2xl border border-gray-100 p-3 space-y-3 shadow-sm text-[13px]"><div class="flex items-center justify-between"><h3 class="font-extrabold text-[14px] text-gray-900">Tạo gói quảng bá</h3><button onclick="state.promoFormOpen=false; render();" class="text-gray-400 font-bold px-2">Đóng ✕</button></div>
+        <div>${lbl('1. Vị trí hiển thị')}${slotSel}<p class="text-gray-500 mt-1">${escQ(sl.where)}</p></div>
+        <div>${lbl('2. Quán')}<select class="field" onchange="pfSet('storeId', this.value)"><option value="">Chọn quán...</option>${state.stores.map(x => `<option value="${attrQ(x.id)}" ${x.id === f.storeId ? 'selected' : ''}>${escQ(x.name)}</option>`).join('')}</select></div>
+        ${sl.kind === 'food' ? `<div>${lbl('3. Món')}<select class="field" onchange="pfSet('foodId', this.value)"><option value="">${f.storeId ? 'Chọn món...' : 'Chọn quán trước'}</option>${foods.map(x => `<option value="${attrQ(x.id)}" ${x.id === f.foodId ? 'selected' : ''}>${escQ(x.name)} (${priceText(x).replace(/<[^>]*>/g, '')})</option>`).join('')}</select></div>` : ''}
+        <div class="grid grid-cols-2 gap-2"><div>${lbl((sl.kind === 'food' ? '4' : '3') + '. Thời gian')}<select class="field" onchange="pfSet('days', this.value)">${[7, 14, 30].map(d => `<option value="${d}" ${+f.days === d ? 'selected' : ''}>${d} ngày</option>`).join('')}</select></div>
+          <div>${lbl('Số tiền thu')}<input class="field" inputmode="numeric" value="${attrQ(f.price)}" oninput="pfPrice(this)" placeholder="VD: 199" /></div></div>
+        <p class="text-gray-500 -mt-1"><span id="pfPricePrev">${pv > 0 ? 'Thu: ' + money(pv) : 'Bỏ trống là dùng thử miễn phí'}</span> · Gợi ý ${money(sug)} <button onclick="pfSuggest()" class="text-emerald-700 font-bold underline">Dùng</button></p>
+        <details class="text-gray-600"><summary class="cursor-pointer font-bold">Ghi chú (chỉ Admin thấy)</summary><input class="field mt-1" value="${attrQ(f.note)}" oninput="promoForm().note=this.value" placeholder="VD: đã thu tiền mặt" /></details>
+        <button onclick="createPromo()" class="w-full bg-emerald-700 text-white h-11 rounded-xl font-extrabold">Bắt đầu quảng bá</button></div>`;
     }
     // Bảng điều khiển nhanh: thấy ngay món/quán nào đang hiện ở đâu, bấm Tắt để dừng, hoặc Bật lại 7 ngày cho gói vừa tắt
     async function reviveSlot(id) {
@@ -1351,11 +1352,12 @@
       const toggle = `<button onclick="state.adminPromoOpen = !state.adminPromoOpen; render();" class="w-full flex items-center justify-between bg-white rounded-2xl border border-gray-100 px-4 py-3.5 shadow-sm text-[14px] font-extrabold text-gray-800"><span>📣 Quảng bá trên trang chủ${live.length ? ` <span class="text-green-700">● ${live.length} đang hiển thị</span>` : ''}</span><span class="text-gray-400 text-[13px]">${open ? '▲' : '▼'}</span></button>`;
       if (!open) return `<div class="space-y-2">${toggle}</div>`;
       if (state.promoReady === false) return `<div class="space-y-2">${toggle}<div class="rounded-2xl bg-amber-50 border border-amber-200 p-3 space-y-2 text-[13px] text-amber-900"><b>Chưa cài phần quảng bá trong Supabase.</b><p>Vào Supabase, mở SQL Editor, dán toàn bộ file <b>promo-setup.sql</b> rồi bấm Run. Xong quay lại đây bấm nút dưới.</p><button onclick="refreshPromos()" class="bg-emerald-700 text-white px-4 h-10 rounded-xl font-extrabold">Kiểm tra lại</button></div></div>`;
+      const repOpen = !!state.promoRepOpen;
       return `<div class="space-y-2.5">${toggle}
-        <p class="text-[13px] text-gray-500 px-1">Bấm "Tắt" để dừng hiển thị ngay, "Bật lại" để chạy lại 7 ngày. Mỗi gói tự đếm lượt xem, lượt bấm và đơn để bạn báo cáo cho chủ quán.</p>
         ${promoBoardHtml(rep)}
-        ${promoFormHtml()}
-        ${rep.length ? rep.map(r => promoCardHtml(r, true)).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có gói nào. Hãy tạo gói dùng thử cho một quán để lấy số liệu đầu tiên.</div>'}</div>`;
+        ${state.promoFormOpen ? promoFormHtml() : `<button onclick="state.promoFormOpen=true; render();" class="w-full h-11 rounded-xl bg-emerald-700 text-white font-extrabold text-[14px]">➕ Tạo gói quảng bá</button>`}
+        ${rep.length ? `<button onclick="state.promoRepOpen=!state.promoRepOpen; render();" class="w-full flex items-center justify-between bg-white rounded-xl border px-3 h-10 text-[13px] font-bold text-gray-800"><span>📊 Báo cáo từng gói (${rep.length})</span><span class="text-gray-400 text-[12px]">${repOpen ? '▲' : '▼'}</span></button>` : ''}
+        ${repOpen ? rep.map(r => promoCardHtml(r, true)).join('') : ''}</div>`;
     }
     function ownerPromoHtml(s) {
       const rep = (state.promoReport || []).filter(r => r.storeId === s.id).sort((a, b) => promoLive(b) - promoLive(a) || new Date(b.startsAt) - new Date(a.startsAt)), live = rep.some(promoLive);
@@ -1620,7 +1622,7 @@
         .forEach(o => (o.items || []).forEach(i => { const f = state.foods.find(x => x.id === i.foodId); if (f && foodOk(f) && !seen.has(f.id) && out.length < 8 && !(state.stores.find(s => s.id === f.storeId) || {}).suspended) { seen.add(f.id); out.push(f); } }));
       return out;
     }
-    // Khu vực "Nổi bật hôm nay" (tối đa 5): gói quảng bá (món lớn / banner quán) lên trước, còn trống thì lấy món bán chạy nhất. Chạy lần lượt từng vị trí.
+    // Khu vực "Nổi bật hôm nay" (tối đa 10): gói quảng bá (món lớn / banner quán) lên trước, còn trống thì lấy món bán chạy nhất. Chạy lần lượt từng vị trí.
     let spotIdx = 0, spotPause = 0, spotN = 0, spotTitles = [];
     function spotItems() {
       const out = [], usedF = new Set(), usedS = new Set(), ok = st => st && !st.suspended && st.isOpen;
