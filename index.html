@@ -38,15 +38,15 @@
     .font-display { font-family: Fraunces, Georgia, 'Times New Roman', serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
     .lift { box-shadow: 0 2px 14px rgba(74, 31, 22, 0.09); }
     /* Khu vực quảng bá: khung hạng (đồng, bạc, vàng, bạch kim, kim cương) và hiệu ứng chuyển động */
-    .ad-frame { padding: 2.5px; border-radius: 18px; background: linear-gradient(110deg, var(--c1), var(--c2), var(--c1)); background-size: 220% 100%; box-shadow: 0 8px 20px -8px var(--c1); }
-    .ad-anim { animation: adBorder 3.4s linear infinite; }
-    .ad-shine { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); animation: adShine 3.6s ease-in-out infinite; pointer-events: none; }
-    .ad-spark { position: absolute; color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.9); animation: adSpark 2.4s ease-in-out infinite; pointer-events: none; }
+    .pm-frame { padding: 2.5px; border-radius: 18px; background: linear-gradient(110deg, var(--c1), var(--c2), var(--c1)); background-size: 220% 100%; box-shadow: 0 8px 20px -8px var(--c1); }
+    .pm-anim { animation: adBorder 3.4s linear infinite; }
+    .pm-shine { position: absolute; top: 0; bottom: 0; left: 0; width: 38%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); animation: adShine 3.6s ease-in-out infinite; pointer-events: none; }
+    .pm-spark { position: absolute; color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.9); animation: adSpark 2.4s ease-in-out infinite; pointer-events: none; }
     .feat-h{height:172px}
     .feat-w{width:calc(50% - 6px)}
-    .ad-in { animation: adIn .55s cubic-bezier(.2,.8,.2,1) both; }
-    .ad-spin { position: absolute; inset: 0; border-radius: 9999px; background: conic-gradient(#f7c948, #fff6c4, #e09a00, #fff1a8, #f7c948); animation: adSpin 3.2s linear infinite; }
-    .ad-wave { animation: adWave 6s ease-in-out infinite; }
+    .pm-in { animation: adIn .55s cubic-bezier(.2,.8,.2,1) both; }
+    .pm-spin { position: absolute; inset: 0; border-radius: 9999px; background: conic-gradient(#f7c948, #fff6c4, #e09a00, #fff1a8, #f7c948); animation: adSpin 3.2s linear infinite; }
+    .pm-wave { animation: adWave 6s ease-in-out infinite; }
     .sp-slide { display: none; position: absolute; inset: 0; cursor: pointer; }
     .sp-slide.on { display: block; animation: spIn .7s cubic-bezier(.2,.8,.2,1); }
     @keyframes spIn { from { opacity: 0; transform: translateX(26px) scale(1.03); } to { opacity: 1; transform: none; } }
@@ -56,7 +56,7 @@
     @keyframes adIn { from { opacity: 0; transform: translateY(16px) scale(.95); } to { opacity: 1; transform: none; } }
     @keyframes adSpin { to { transform: rotate(360deg); } }
     @keyframes adWave { 0%, 22%, 100% { transform: translateY(0) scale(1); } 6% { transform: translateY(-5px) scale(1.09); } 14% { transform: translateY(0) scale(1); } }
-    @media (prefers-reduced-motion: reduce) { .sp-slide.on, .ad-anim, .ad-shine, .ad-spark, .ad-in, .ad-spin, .ad-wave { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .sp-slide.on, .pm-anim, .pm-shine, .pm-spark, .pm-in, .pm-spin, .pm-wave { animation: none !important; } }
     button:active { transform: scale(0.97); transition: transform .08s; }
     @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
     .field { width: 100%; min-height: 44px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 11px 12px; font-size: 15px; color: #111827; background: #fff; outline: none; transition: all 0.2s; }
@@ -71,7 +71,7 @@
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .map-picker { height: 220px; width: 100%; border-radius: 1rem; z-index: 10; margin-top: 8px; }
   </style>
-  <meta name="app-version" content="2026-11-27-feat-fix">
+  <meta name="app-version" content="2026-11-27-adblock-fix">
   <meta name="color-scheme" content="dark">
   <style id="dark-theme">
     :root { color-scheme: dark; }
@@ -1189,15 +1189,15 @@
       const r = adRefGet(), x = r[storeId]; if (!x || Date.now() - x.at > 864e5) return;
       logPromo(x.id, 'order', value); delete r[storeId]; adRefSet(r);
     }
-    document.addEventListener('click', e => { const el = e.target && e.target.closest && e.target.closest('[data-ad]'); if (el) adClicked(el.dataset.ad); }, true);
+    document.addEventListener('click', e => { const el = e.target && e.target.closest && e.target.closest('[data-pm]'); if (el) adClicked(el.dataset.pm); }, true);
     let adIO = null, adTimers = {};
     const adCanCount = () => !document.hidden && (state.activeTab === 'home' || state.activeTab === 'orders') && !state.viewStoreId && !state.showCart && !state.showCheckout && !state.sizePick && !state.optEdit && !state.showAuth;
     function observeAds() {   // một lượt xem = thẻ quảng cáo hiện rõ trên màn hình ít nhất 1 giây
       if (adIO) adIO.disconnect(); Object.values(adTimers).forEach(clearTimeout); adTimers = {};
       if (!supabaseClient || !window.IntersectionObserver) return;
-      const els = document.querySelectorAll('[data-ad]'); if (!els.length) return;
+      const els = document.querySelectorAll('[data-pm]'); if (!els.length) return;
       adIO = new IntersectionObserver(es => es.forEach(en => {
-        const id = en.target.dataset.ad;
+        const id = en.target.dataset.pm;
         if (en.isIntersecting && en.intersectionRatio >= 0.6) { if (!adTimers[id]) adTimers[id] = setTimeout(() => { delete adTimers[id]; if (adCanCount()) logPromo(id, 'view'); }, 1000); }
         else { clearTimeout(adTimers[id]); delete adTimers[id]; }
       }), { threshold: [0, 0.6, 1] });
@@ -1404,14 +1404,14 @@
       const wkSold = state.weekSales ? (state.weekSales[f.id] || 0) : 0, badge = wkSold > 0 || sold > 0 ? 'Bán chạy' : 'Món mới';
       if (f._tier) {   // món quảng bá: khung theo hạng
         const t = { c1: '#d99a00', c2: '#ffe28a', lvl: 3 }, w = 'feat-w';   // khách chỉ thấy một kiểu khung quảng bá duy nhất, không có hạng
-        return `<div data-feat class="snap-start shrink-0 ${w} ${adIntro() ? 'ad-in' : ''}" style="animation-delay:${(i || 0) * 120}ms"><div data-ad="${f._ad}" class="ad-frame ${t.lvl >= 3 ? 'ad-anim' : ''}" style="--c1:${t.c1};--c2:${t.c2}"><div class="relative feat-h rounded-[15px] overflow-hidden bg-bark-deep cursor-pointer" onclick="${go}">
+        return `<div data-feat class="snap-start shrink-0 ${w} ${adIntro() ? 'pm-in' : ''}" style="animation-delay:${(i || 0) * 120}ms"><div data-pm="${f._ad}" class="pm-frame ${t.lvl >= 3 ? 'pm-anim' : ''}" style="--c1:${t.c1};--c2:${t.c2}"><div class="relative feat-h rounded-[15px] overflow-hidden bg-bark-deep cursor-pointer" onclick="${go}">
           <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
           <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
-          <span class="ad-shine"></span>
+          <span class="pm-shine"></span>
           <div class="absolute left-3 right-14 bottom-3"><p class="text-white/80 text-[13px] truncate">${escQ(st.name || '')}</p><b class="block font-display text-[16px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><p class="font-extrabold text-[15px]" style="color:${t.c2}">${priceText(f)}</p></div>
           <div class="absolute right-2.5 bottom-2.5 z-10">${plusHtml(f.id, true)}</div></div></div></div>`;
       }
-      return `<div data-feat class="snap-start shrink-0 feat-w"><div ${f._ad ? `data-ad="${f._ad}"` : ''} class="relative feat-h rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
+      return `<div data-feat class="snap-start shrink-0 feat-w"><div ${f._ad ? `data-pm="${f._ad}"` : ''} class="relative feat-h rounded-2xl overflow-hidden bg-bark-deep ${f._ad ? 'ring-2 ring-nghe/70' : 'ring-1 ring-white/10'} cursor-pointer" onclick="${go}">
         <img src="${f.image}" loading="lazy" class="absolute inset-0 w-full h-full object-cover" />
         <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/15 to-transparent"></div>
         ${f._ad ? '' : `<span class="absolute top-2.5 left-2.5 bg-nghe text-bark text-[13px] font-bold px-2.5 py-0.5 rounded-full">${badge}</span>`}
@@ -1632,7 +1632,7 @@
       spotTitles = items.map(it => it.type === 'store' ? spotLine(it.st).text : it.ad ? 'Hôm nay thử ngay ' + it.f.name : ''); const t0 = paid ? spotTitles[spotIdx] : '';
       const tag = (txt, ad) => `<span class="absolute top-3 left-3 z-10 ${ad ? 'bg-white/90 text-bark' : 'bg-nghe text-bark'} text-[13px] font-extrabold px-3 py-1 rounded-full shadow">${txt}</span>`;
       const slides = items.map((it, i) => {
-        const on = i === spotIdx ? ' on' : '', ad = it.ad ? ` data-ad="${it.ad}"` : '';
+        const on = i === spotIdx ? ' on' : '', ad = it.ad ? ` data-pm="${it.ad}"` : '';
         if (it.type === 'store') { const st = it.st, ln = spotLine(st), im = attrQ(st.cover || st.image); return `<div class="sp-slide${on}"${ad} onclick="state.viewStoreId='${st.id}'; render();"><div class="absolute inset-x-0 top-0 h-[190px] overflow-hidden bg-bark-deep"><img loading="lazy" decoding="async" src="${im}" alt="" class="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-80" /><img loading="lazy" decoding="async" src="${im}" alt="${attrQ(st.name)}" class="relative w-full h-full object-contain" /></div>
           <div class="absolute inset-x-0 bottom-0 h-[58px] bg-white flex items-center gap-2.5 px-3"><img loading="lazy" decoding="async" src="${attrQ(st.image)}" class="w-9 h-9 rounded-full object-cover border border-gray-200 shrink-0" /><span class="flex-1 min-w-0"><b class="block text-[14px] leading-tight text-bark line-clamp-1">${escQ(st.name)}</b><span class="block text-[13px] text-gray-500 line-clamp-1">${ln.n ? ln.n + ' món đang bán' : escQ(st.slogan || 'Đang mở cửa')}</span></span><span class="shrink-0 bg-gac text-white rounded-full px-4 py-2 text-[14px] font-extrabold">Xem quán ›</span></div></div>`; }
         const f = it.f, st = it.st || {}, go = `state.viewStoreId='${f.storeId}'; render();`;
@@ -2679,7 +2679,7 @@
         const skel = '<div class="bg-white rounded-2xl border border-black/5 overflow-hidden animate-pulse"><div class="h-36 bg-gray-200"></div><div class="p-3 space-y-2"><div class="h-3 bg-gray-200 rounded w-4/5"></div><div class="h-3 bg-gray-200 rounded w-2/5"></div></div></div>';
         html += `
           ${browsing && shops.length > 1 ? `<section class="space-y-2.5"><h3 class="${h3}">Quán quanh bạn</h3><div data-scroll="stores" class="flex gap-3.5 overflow-x-auto no-scrollbar -mx-1 px-1 pt-2 pb-1">${(() => { const intro = adIntro(); let n = 0; return shops.map(st => { const ad = st.isOpen && !st.suspended ? storeRankOf(st.id) : null, k = n++, box = 'flex:0 0 calc((100% - 42px) / 4);min-width:0';
-            if (ad) return `<button data-ad="${ad.id}" onclick="state.viewStoreId='${st.id}'; render();" class="flex flex-col items-center gap-1 ${intro ? 'ad-in' : ''}" style="${box};animation-delay:${k * 130}ms"><span class="ad-wave relative block w-full" style="aspect-ratio:1/1;animation-delay:${k * 0.7}s"><span class="ad-spin"></span><img src="${st.image}" loading="lazy" style="position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px)" class="rounded-full object-cover border-2 border-white" /><span class="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span></span><span class="text-[13px] font-extrabold text-bark line-clamp-1 w-full text-center">${escQ(st.name)}</span><span class="-mt-1 text-[13px] font-bold text-gac">Tài trợ</span></button>`;
+            if (ad) return `<button data-pm="${ad.id}" onclick="state.viewStoreId='${st.id}'; render();" class="flex flex-col items-center gap-1 ${intro ? 'pm-in' : ''}" style="${box};animation-delay:${k * 130}ms"><span class="pm-wave relative block w-full" style="aspect-ratio:1/1;animation-delay:${k * 0.7}s"><span class="pm-spin"></span><img src="${st.image}" loading="lazy" style="position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px)" class="rounded-full object-cover border-2 border-white" /><span class="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span></span><span class="text-[13px] font-extrabold text-bark line-clamp-1 w-full text-center">${escQ(st.name)}</span><span class="-mt-1 text-[13px] font-bold text-gac">Tài trợ</span></button>`;
             return `<button onclick="state.viewStoreId='${st.id}'; render();" class="flex flex-col items-center gap-1.5 self-start" style="${box}"><span class="relative block w-full" style="aspect-ratio:1/1"><img src="${st.image}" loading="lazy" class="w-full h-full rounded-full object-cover border-[3px] ${st.isOpen ? 'border-nghe' : 'border-gray-200 grayscale'}" />${st.isOpen ? '<span class="absolute bottom-1 right-1 w-4 h-4 rounded-full bg-green-500 border-2 border-white"></span>' : ''}</span><span class="text-[13px] font-semibold text-gray-700 line-clamp-1 w-full text-center">${escQ(st.name)}</span></button>`; }).join(''); })()}</div></section>` : ''}
           ${categoryBarHtml()}
           ${searchStoresHtml(matchedStores, state.searchQuery)}
