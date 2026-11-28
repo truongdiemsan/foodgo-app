@@ -69,34 +69,8 @@
     nav button span:last-child { font-size: 13px; line-height: 1.15; text-align: center; }
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    /* ===== TAB ĐƠN HÀNG: thẻ hội viên, trạng thái rỗng, dòng đơn gần đây, khối chủ quán (viết CSS riêng, không phụ thuộc Tailwind) ===== */
-    .ord-eyebrow { font-size: 13px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.66); }
-    .ord-member { display: grid; gap: 11px; padding: 14px 16px 13px; border-radius: 20px; border: 1px solid rgba(242,177,52,.4); box-shadow: 0 14px 28px -16px rgba(0,0,0,.75);
-      background: radial-gradient(130% 150% at 100% 0%, rgba(242,177,52,.24), transparent 55%), linear-gradient(160deg, #5c281b, #341209); }
-    .ord-track { height: 8px; border-radius: 99px; background: rgba(255,255,255,.15); overflow: hidden; }
-    .ord-track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #F2B134, #FF6B3D); }
-    .ord-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding-top: 4px; }
-    .ord-h h3 { font-family: 'Fraunces', Georgia, serif; font-weight: 700; font-size: 19px; line-height: 1.25; }
-    .ord-sub { font-size: 13px; color: #968d84; }
-    .ord-pill { font-size: 13px; font-weight: 800; color: #F2B134; background: rgba(242,177,52,.16); border-radius: 99px; padding: 1px 11px; }
-    .ord-link { font-size: 13px; font-weight: 700; color: #FF7A5C; min-height: 36px; padding: 0 2px; }
-    .ord-steam { width: 46px; height: 38px; flex-shrink: 0; }
-    .ord-empty-row .ord-steam { width: 36px; height: 30px; }
-    .ord-empty { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 20px 18px 18px; border-radius: 20px; border: 1.5px dashed #4d4741; background: rgba(255,255,255,.02); }
-    .ord-empty-row { display: flex; align-items: center; justify-items: initial; gap: 10px; text-align: left; padding: 12px 12px; }
-    .ord-cta { margin-top: 8px; background: #D93A1F; color: #fff; font-weight: 800; font-size: 15px; border-radius: 14px; padding: 12px 26px; min-height: 44px; }
-    .ord-cta-sm { margin: 0; flex-shrink: 0; font-size: 14px; padding: 10px 14px; }
-    .ord-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 18px; background: #161412; border: 1px solid #34302c; }
-    .ord-logo { width: 46px; height: 46px; border-radius: 15px; object-fit: cover; flex-shrink: 0; background: #2a2623; border: 1px solid #3d3833; }
-    .ord-logo-ph { display: flex; align-items: center; justify-content: center; font-size: 20px; }
-    .ord-reorder { flex-shrink: 0; height: 42px; padding: 0 16px; border-radius: 13px; background: #F2B134; color: #331510; font-weight: 800; font-size: 14px; }
-    .ord-list { border-radius: 20px; background: #161412; border: 1px solid #34302c; overflow: hidden; }
-    .ord-list > * + * { border-top: 1px solid #34302c; }
-    .ord-biz { display: grid; gap: 8px; padding: 12px 14px; border-radius: 16px; border: 1px solid rgba(242,177,52,.32); border-left: 4px solid #F2B134; background: linear-gradient(135deg, rgba(242,177,52,.11), rgba(242,177,52,.03)); }
-    .ord-eyebrow-gold { color: #F2B134; }
-    .ord-biz-row { display: flex; align-items: center; gap: 12px; text-align: left; }
   </style>
-  <meta name="app-version" content="2026-11-28-counter">
+  <meta name="app-version" content="2026-11-28-sort">
   <meta name="color-scheme" content="dark">
   <style id="dark-theme">
     :root { color-scheme: dark; }
@@ -441,10 +415,11 @@
             subtotal: Number(o.subtotal), shippingFee: Number(o.shipping_fee), total: Number(o.total),
             fulfillmentMethod: o.fulfillment_method, pickupTime: o.pickup_time, status: o.status,
             customerName: o.customer_name, customerPhone: o.customer_phone, deliveryAddress: o.delivery_address,
-            customerNote: o.customer_note, createdAt: o.created_at, customerId: String(o.id).startsWith('QT-') ? 'counter' : o.customer_id, consent: o.marketing_consent
+            customerNote: o.customer_note, createdAt: o.created_at, receivedAt: o.received_at ? (new Date(o.received_at).getTime() || 0) : 0, customerId: String(o.id).startsWith('QT-') ? 'counter' : o.customer_id, consent: o.marketing_consent
           }));
         }
         state.orders = clean(state.orders); const cloudIds = new Set(state.orders.map(o => o.id)); state.orders = [...keepLocal.filter(o => !cloudIds.has(o.id)), ...state.orders];
+        recvStamp(state.orders, recvBoot); recvBoot = false;
         detectNewOrders();
         saveState();
         render();
@@ -750,7 +725,25 @@
       return `<span class="flex gap-1.5"><a href="tel:${s.phone}" class="border px-3 py-1.5 rounded-lg text-[13px] font-bold">📞 Gọi</a><a href="https://zalo.me/${normPhone(s.phone)}" target="_blank" class="border px-3 py-1.5 rounded-lg text-[13px] font-bold">Zalo</a></span>`;
     }
     // ===== GIAO DIỆN CHỦ QUÁN: đơn hàng lên đầu · thực đơn gọn · cài đặt thu gọn =====
-    const orderTime = o => { const d = new Date(o.createdAt), t = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === new Date().toDateString() ? t : t + ' ' + d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }); };
+    const fmtT = ms => { const d = new Date(ms), t = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }); return d.toDateString() === new Date().toDateString() ? t : t + ' ' + d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }); };
+    const orderTime = o => fmtT(new Date(o.createdAt).getTime());
+    // ===== GIỜ QUÁN NHẬN ĐƠN: đơn về hệ thống trước nằm trên, thứ tự cố định =====
+    // Ưu tiên giờ máy chủ (cột received_at, xem order-received-setup.sql). Chưa có cột thì ghi nhớ giờ máy này thấy đơn lần đầu.
+    let recvBoot = true, recvMap = {};
+    try { recvMap = JSON.parse(localStorage.getItem('fg_recv_v1') || '{}') || {}; } catch { recvMap = {}; }
+    const ctimeOf = o => new Date(o.createdAt).getTime() || 0;
+    const recvOf = o => o.receivedAt || recvMap[o.id] || ctimeOf(o);
+    function recvStamp(list, boot) {
+      let dirty = false; const now = Date.now();
+      list.forEach(o => { if (!o.receivedAt && !recvMap[o.id]) { recvMap[o.id] = boot ? Math.min(ctimeOf(o) || now, now) : now; dirty = true; } });
+      if (!dirty) return;
+      const ids = Object.keys(recvMap); if (ids.length > 400) ids.sort((a, b) => recvMap[a] - recvMap[b]).slice(0, ids.length - 400).forEach(k => delete recvMap[k]);
+      try { localStorage.setItem('fg_recv_v1', JSON.stringify(recvMap)); } catch {}
+    }
+    const recvCmp = (a, b) => recvOf(a) - recvOf(b) || ctimeOf(a) - ctimeOf(b) || String(a.id).localeCompare(String(b.id));
+    try { state.ownSort = localStorage.getItem('fg_own_sort') === 'recv' ? 'recv' : 'cust'; } catch { state.ownSort = 'cust'; }
+    function setOwnSort(v) { state.ownSort = v === 'recv' ? 'recv' : 'cust'; try { localStorage.setItem('fg_own_sort', state.ownSort); } catch {} render(); }
+    function goPending() { const e = document.querySelector('[data-pend="1"]'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     // Tiền cọc 30% của đơn nhóm gửi tới quán: chủ quán thấy trên đơn và bấm xác nhận khi đã nhận tiền
     state.deposits = [];
     async function loadDeposits() {
@@ -850,8 +843,9 @@
         id: 'QT-' + Math.random().toString(36).slice(2, 7).toUpperCase(), storeId: s.id, storeName: s.name, storePhone: s.phone || '', items,
         subtotal: t.sub, shippingFee: t.ship, total: t.total, fulfillmentMethod: c.how, pickupTime: null, status: c.done ? 'COMPLETED' : 'CONFIRMED',
         customerName: clean(c.name).trim() || 'Khách tại quầy', customerPhone: ph, deliveryAddress: c.how === 'DELIVERY' ? clean(c.addr).trim() : c.how === 'DINEIN' ? (clean(c.addr).trim() || 'quán') : 'Khách mang đi',
-        customerNote: clean(c.note).trim(), createdAt: new Date().toISOString(), unsynced: !!supabaseClient, customerId: 'counter', consent: false
+        customerNote: clean(c.note).trim(), createdAt: new Date().toISOString(), unsynced: !!supabaseClient, customerId: 'counter', consent: false, receivedAt: Date.now()
       };
+      recvMap[o.id] = o.receivedAt; try { localStorage.setItem('fg_recv_v1', JSON.stringify(recvMap)); } catch {}
       state.orders = [o, ...state.orders]; const wantPrint = c.print; state.counter = null; saveState(); render();
       showToast('Đã tạo đơn ' + o.id + (c.done ? ' (đã tính doanh thu).' : '. Đơn đang chuẩn bị.'));
       if (wantPrint) printOrder(o.id);
@@ -869,13 +863,14 @@
       if (r.error && r.error.code !== '23505') { console.error('Lỗi lưu đơn tại quầy:', r.error); showToast('⚠️ Đơn chưa gửi được lên hệ thống: ' + r.error.message); return false; }
       o.unsynced = false; saveState(); render(); return true;
     }
-    function ownerOrderCard(o) {
+    function ownerOrderCard(o, rank) {
       const pend = o.status === 'PENDING_CONFIRMATION', done = isDone(o), open = !done || state.orderOpen[o.id];
+      const byRecv = state.ownSort === 'recv', tm = byRecv ? '📥 Nhận ' + fmtT(recvOf(o)) : '🕒 ' + orderTime(o);
       const nx = NEXT[o.status], ph = String(o.customerPhone || '').trim();
       const n = (o.items || []).reduce((a, i) => a + (i.quantity || 0), 0);
       const call = ph ? `<a href="tel:${escQ(ph)}" class="flex-1 text-center border border-sky-300 text-sky-800 bg-white rounded-xl py-3 font-extrabold">📞 ${escQ(ph)}</a><a href="https://zalo.me/${escQ(normPhone(ph))}" target="_blank" class="px-4 text-center border border-gray-300 bg-white rounded-xl py-3 font-bold">Zalo</a>` : '';
-      return `<div class="rounded-2xl border-2 ${pend ? 'border-rose-400 bg-rose-50' : 'border-gray-100 bg-white'} p-3 space-y-2 shadow-sm text-[13px]">
-        <div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5"><span class="font-black text-[14px] text-gray-900">${escQ(o.id)}</span><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${(STATUS[o.status] || [0, ''])[1]}">${(STATUS[o.status] || [o.status])[0]}</span></div><p class="text-gray-500 mt-0.5">🕒 ${orderTime(o)} · ${escQ(o.customerName || 'Khách')} · ${n} món</p></div><b class="text-[17px] text-emerald-700 shrink-0">${money(o.total)}</b></div>
+      return `<div ${pend ? 'data-pend="1"' : ''} class="rounded-2xl border-2 ${pend ? 'border-rose-400 bg-rose-50' : 'border-gray-100 bg-white'} p-3 space-y-2 shadow-sm text-[13px]">
+        <div class="flex items-start justify-between gap-2"><div class="min-w-0"><div class="flex flex-wrap items-center gap-1.5">${rank ? `<span class="w-7 h-7 rounded-full bg-nghe text-bark font-black text-[14px] grid place-items-center shrink-0" title="Thứ tự làm">${rank}</span>` : ''}<span class="font-black text-[14px] text-gray-900">${escQ(o.id)}</span><span class="text-[13px] font-bold px-2 py-0.5 rounded-full ${(STATUS[o.status] || [0, ''])[1]}">${(STATUS[o.status] || [o.status])[0]}</span></div><p class="text-gray-500 mt-0.5">${tm} · ${escQ(o.customerName || 'Khách')} · ${n} món</p></div><b class="text-[17px] text-emerald-700 shrink-0">${money(o.total)}</b></div>
         ${depositBoxHtml(o)}
         ${done && !open ? `<button onclick="state.orderOpen['${o.id}']=true; render();" class="w-full text-center text-[13px] font-bold text-sky-700">Xem chi tiết ▼</button>` : `
         ${call ? `<div class="flex gap-2">${call}</div>` : ''}
@@ -918,21 +913,24 @@
       </section>`;
     }
     function ownerOrdersHtml(orders) {
-      const t = o => new Date(o.createdAt).getTime() || 0;
-      const active = orders.filter(o => !isDone(o)).sort((a, b) => (b.status === 'PENDING_CONFIRMATION') - (a.status === 'PENDING_CONFIRMATION') || t(a) - t(b));
-      const done = orders.filter(isDone).sort((a, b) => t(b) - t(a)).slice(0, 30);
+      const t = ctimeOf, byRecv = state.ownSort === 'recv';
+      // Mặc định: đơn chờ xác nhận lên đầu, rồi theo giờ khách đặt. Theo giờ quán nhận: thứ tự cố định, đơn về trước nằm trên, đơn mới về nằm dưới.
+      const active = orders.filter(o => !isDone(o)).sort(byRecv ? recvCmp : (a, b) => (b.status === 'PENDING_CONFIRMATION') - (a.status === 'PENDING_CONFIRMATION') || t(a) - t(b));
+      const done = orders.filter(isDone).sort(byRecv ? (a, b) => recvCmp(b, a) : (a, b) => t(b) - t(a)).slice(0, 30);
       const pn = active.filter(o => o.status === 'PENDING_CONFIRMATION').length;
       if (state.ownStatus) {
         const st = state.ownStatus, R = ownRange(), isEnd = st === 'COMPLETED' || st === 'CANCELLED';
         const list = orders.filter(o => o.status === st && (!isEnd || ownT(o) >= R.start)).sort((a, b) => ownT(b) - ownT(a)).slice(0, 50);
         return `<section class="space-y-2.5"><div class="flex items-center justify-between gap-2"><h2 class="font-extrabold text-[17px] text-gray-900">🧾 ${STATUS[st][0]} <span class="text-[13px] text-gray-400 font-bold">(${list.length})</span></h2><button onclick="state.ownStatus=''; render();" class="px-3 h-9 rounded-full border text-[13px] font-bold text-gray-700 bg-white">✕ Xem tất cả</button></div>
-          ${list.length ? list.map(ownerOrderCard).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Không có đơn nào ở trạng thái này.</div>'}</section>`;
+          ${list.length ? list.map(o => ownerOrderCard(o)).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Không có đơn nào ở trạng thái này.</div>'}</section>`;
       }
       return `<section class="space-y-2.5">
-        <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🧾 Đơn hàng</h2><span class="text-[13px] text-gray-500">${pn ? `<b class="text-rose-600">${pn} chờ xác nhận</b> · ` : ''}${active.length} đang xử lý</span></div>
+        <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🧾 Đơn hàng</h2><span class="text-[13px] text-gray-500">${pn ? `<button onclick="goPending()" class="font-bold text-rose-600 underline">${pn} chờ xác nhận</button> · ` : ''}${active.length} đang xử lý</span></div>
         <button onclick="counterOpen()" class="w-full h-11 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold shadow">➕ Tạo đơn tại quầy</button>
-        ${active.length ? active.map(ownerOrderCard).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có đơn nào đang xử lý.<br>Khi khách đặt món, đơn hiện ở đây kèm chuông báo.</div>'}
-        ${done.length ? `<button onclick="state.showDone=!state.showDone; render();" class="w-full bg-white border border-gray-200 rounded-2xl py-3 text-[14px] font-bold text-gray-700">${state.showDone ? '▲ Ẩn' : '▼ Xem'} đơn đã xong (${done.length})</button>${state.showDone ? done.map(ownerOrderCard).join('') : ''}` : ''}
+        <div class="space-y-1.5"><div class="flex gap-1.5"><button onclick="setOwnSort('cust')" class="flex-1 h-10 rounded-xl text-[13px] font-bold border ${byRecv ? 'bg-white text-gray-700' : 'bg-nghe text-bark border-nghe'}">📋 Mặc định</button><button onclick="setOwnSort('recv')" class="flex-1 h-10 rounded-xl text-[13px] font-bold border ${byRecv ? 'bg-nghe text-bark border-nghe' : 'bg-white text-gray-700'}">⏱️ Giờ quán nhận</button></div>
+          <p class="text-[12.5px] text-gray-500 leading-snug">${byRecv ? 'Đơn về hệ thống trước nằm trên. Thứ tự cố định, đơn mới về nằm dưới cùng, không chen lên trên. Làm lần lượt từ số 1.' : 'Sắp xếp theo giờ khách đặt, đơn chờ xác nhận lên đầu.'}</p></div>
+        ${active.length ? active.map((o, i) => ownerOrderCard(o, byRecv ? i + 1 : 0)).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có đơn nào đang xử lý.<br>Khi khách đặt món, đơn hiện ở đây kèm chuông báo.</div>'}
+        ${done.length ? `<button onclick="state.showDone=!state.showDone; render();" class="w-full bg-white border border-gray-200 rounded-2xl py-3 text-[14px] font-bold text-gray-700">${state.showDone ? '▲ Ẩn' : '▼ Xem'} đơn đã xong (${done.length})</button>${state.showDone ? done.map(o => ownerOrderCard(o)).join('') : ''}` : ''}
       </section>`;
     }
     function ownerAlertSetupHtml() {
@@ -1900,29 +1898,24 @@
       o.status = 'CANCELLED'; saveState(); render(); showToast('Đã hủy đơn ' + id + '.');
     }
     function orderRowHtml(o) {
-      const ok = o.status === 'COMPLETED', n = (o.items || []).reduce((a, i) => a + i.quantity, 0), st = state.stores.find(x => x.id === o.storeId) || {};
-      const logo = st.image ? `<img loading="lazy" decoding="async" src="${attrQ(st.image)}" alt="" class="ord-logo" />` : '<span class="ord-logo ord-logo-ph">🏪</span>';
-      return `<div class="ord-row"><div onclick="state.openOrderId='${o.id}'; render();" class="flex items-center gap-3 min-w-0 flex-1 cursor-pointer">${logo}<div class="min-w-0"><b class="block text-[15px] truncate">${escQ(o.storeName)}</b><span class="block text-[13px] text-gray-500 truncate">${formatDate(o.createdAt)} · ${n} món · ${money(o.total)}</span><span class="block text-[13px] font-bold ${ok ? 'text-emerald-700' : 'text-rose-600'}">${ok ? '✓ Hoàn tất' : '✕ Đã hủy'}${ok && !state.myReviews[o.id] ? ' · <span class="text-amber-600">⭐ Chấm sao</span>' : ''}</span></div></div>${ok ? `<button onclick="reorderOldOrder('${o.id}')" class="ord-reorder">Đặt lại</button>` : ''}</div>`;
+      const ok = o.status === 'COMPLETED', n = (o.items || []).reduce((a, i) => a + i.quantity, 0);
+      return `<div onclick="state.openOrderId='${o.id}'; render();" class="bg-white rounded-xl border border-gray-100 p-3 flex justify-between items-center gap-2 cursor-pointer min-h-[44px]">
+        <div class="min-w-0"><p class="text-[13px] font-bold truncate">${o.storeName}</p><p class="text-[13px] text-gray-400">${formatDate(o.createdAt)} · ${n} món</p></div>
+        <div class="text-right shrink-0"><p class="text-[13px] font-extrabold text-emerald-700">${money(o.total)}</p>
+          <p class="text-[13px] font-bold ${ok ? 'text-emerald-700' : 'text-rose-600'}">${ok ? '✓ Xong' : '✕ Đã hủy'}${ok && !state.myReviews[o.id] ? ' · <span class="text-amber-600">⭐ Chấm sao</span>' : ''} ›</p></div></div>`;
     }
     // ===== Tab Đơn hàng: các khối tiện ích dưới danh sách đơn =====
     // Đầu tab Đơn hàng: tiêu đề + một chip bên phải (điểm hoặc Đăng nhập) + một dòng gợi ý nhỏ
     function ordersHeadHtml() {
       const n = state.orders.filter(o => !o.customerId || (state.user && o.customerId === state.user.id)).length;
-      const head = '<h2 class="font-display font-bold text-[24px] leading-tight">Đơn hàng của tôi</h2>';
-      if (!hasAccount()) {
-        const sub = n ? 'Máy này đang lưu ' + n + ' đơn. Mỗi 1.000đ được 1 điểm.' : 'Mỗi 1.000đ được 1 điểm.';
-        return head + `<div class="flex items-center justify-between gap-3 bg-bark rounded-2xl px-4 py-3.5 shadow-md">
-          <div class="min-w-0"><p class="text-nghe font-extrabold text-[15px] leading-snug">Đăng nhập để giữ đơn, tích điểm</p><p class="text-white/80 text-[13px] mt-0.5 leading-snug">${sub}</p></div><button onclick="state.showAuth=true; render();" class="shrink-0 px-5 py-3 rounded-xl bg-nghe text-bark text-[15px] font-extrabold active:scale-95 transition">Đăng nhập</button>
+      const logged = hasAccount();
+      const title = logged ? '⭐ ' + myPoints() + ' điểm · ' + tierOf(myPoints()) : 'Đăng nhập để giữ đơn, tích điểm';
+      const sub = !logged && n ? 'Máy này đang lưu ' + n + ' đơn. Mỗi 1.000đ được 1 điểm.' : 'Mỗi 1.000đ được 1 điểm.';
+      const btn = logged ? '' : `<button onclick="state.showAuth=true; render();" class="shrink-0 px-5 py-3 rounded-xl bg-nghe text-bark text-[15px] font-extrabold active:scale-95 transition">Đăng nhập</button>`;
+      return `<h2 class="font-extrabold text-[17px]">Đơn hàng của tôi</h2>
+        <div class="flex items-center justify-between gap-3 bg-bark rounded-2xl px-4 py-3.5 shadow-md">
+          <div class="min-w-0"><p class="text-nghe font-extrabold text-[15px] leading-snug">${title}</p><p class="text-white/80 text-[13px] mt-0.5 leading-snug">${sub}</p></div>${btn}
         </div>`;
-      }
-      // Thẻ hội viên: hạng, điểm và thanh tiến độ tới hạng kế tiếp (Đồng < 100, Bạc từ 100, Vàng từ 300)
-      const pts = myPoints(), next = pts >= 300 ? null : pts >= 100 ? [300, 'Vàng'] : [100, 'Bạc'];
-      const pct = next ? Math.max(4, Math.min(100, Math.round(pts / next[0] * 100))) : 100;
-      return head + `<div class="ord-member">
-        <div class="flex items-start justify-between gap-3"><div class="min-w-0"><p class="ord-eyebrow">Hạng thành viên</p><p class="font-display font-bold text-[26px] leading-tight text-nghe">${tierOf(pts)}</p></div><div class="text-right shrink-0"><p class="font-display font-bold text-[32px] leading-none text-white">${pts}</p><p class="text-[13px] text-white/70">điểm</p></div></div>
-        <div class="ord-track"><i style="width:${pct}%"></i></div>
-        <div class="flex items-center justify-between gap-3 text-[13px]"><b class="text-white/90">${next ? 'Còn ' + (next[0] - pts) + ' điểm nữa lên hạng ' + next[1] : 'Bạn đang ở hạng cao nhất'}</b><span class="text-white/65 shrink-0">Mỗi 1.000đ = 1 điểm</span></div>
-      </div>`;
     }
     function recentDishes() {   // món khách từng đặt trên máy này (mới nhất trước), chỉ lấy món còn bán
       const seen = new Set(), out = [];
@@ -1974,7 +1967,7 @@
         return `<div class="sp-slide${on}"${ad} onclick="${go}"><img loading="lazy" decoding="async" src="${f.image}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-black/5"></div>${it.ad ? '' : tag('🔥 Bán chạy hôm nay', false)}
           <div class="absolute left-4 right-[72px] bottom-4"><span class="block text-[13px] text-white/85 line-clamp-1">🏪 ${escQ(st.name || '')}</span><b class="block font-display text-[24px] leading-tight text-white line-clamp-2">${escQ(f.name)}</b><span class="font-extrabold text-[18px] text-nghe">${priceText(f)}</span></div><div class="absolute right-3 bottom-3 z-10">${plusHtml(f.id, true)}</div></div>`;
       }).join('');
-      return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 id="spotTitle" class="font-display text-[19px] leading-snug min-h-[46px] flex items-center">${paid ? '😋 ' + escQ(t0) : '🔥 Món bán chạy hôm nay'}</h3></div>
+      return `<div class="space-y-2"><div class="flex items-baseline justify-between pt-1"><h3 id="spotTitle" class="font-extrabold text-[17px] leading-snug min-h-[46px] flex items-center">${paid ? '😋 ' + escQ(t0) : '🔥 Món bán chạy hôm nay'}</h3></div>
         <div data-spot class="relative h-[248px] rounded-3xl overflow-hidden bg-bark-deep shadow-lg">${slides}</div>
         </div>`;
     }
@@ -2020,16 +2013,14 @@
     }
     function ordersExtrasHtml() {
       if (!state.stores.length) return '';
-      const row = list => `<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">${list.join('')}</div>`, h = (t, sub) => `<div class="ord-h"><h3>${t}</h3>${sub ? `<span class="ord-sub">${sub}</span>` : ''}</div>`;
-      const recent = recentDishes(), recentHtml = recent.length ? h('Món bạn hay đặt', 'bấm + để đặt lại') + row(recent.map(foodMiniCardHtml)) : '';
+      const row = list => `<div class="flex gap-3 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">${list.join('')}</div>`, h = (t, sub) => `<div class="flex items-baseline justify-between pt-1"><h3 class="font-extrabold text-[15px]">${t}</h3>${sub ? `<span class="text-[13px] text-gray-400">${sub}</span>` : ''}</div>`;
+      const recent = recentDishes(), recentHtml = recent.length ? h('🔁 Món bạn hay đặt', 'bấm + để đặt lại') + row(recent.map(foodMiniCardHtml)) : '';
       const owner = !!state.profile.myStoreId || state.isAdmin, free = Math.max(0, SPOT_MAX - activePromos().filter(p => slotInfo(p.slot).ord).length);
       const rowCls = 'w-full flex items-center gap-3 px-3.5 py-3 text-left';
-      const together = `<div class="ord-list">
+      const util = `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm divide-y divide-gray-100 overflow-hidden">
         <button onclick="shareApp()" class="${rowCls}"><span class="text-xl">🎁</span><span class="flex-1 min-w-0"><b class="block text-[14px]">Mời bạn bè cùng đặt món</b><span class="block text-[13px] text-gray-500">Gửi ShopFood cho người quen ở Trà Bồng</span></span><b class="shrink-0 text-[13px] text-gac">Chia sẻ ›</b></button>
-        ${groupRowHtml(rowCls)}</div>`;
-      // Lời mời bán vị trí quảng bá: gắn nhãn rõ "Dành cho chủ quán" để khách mua hàng không nhầm với tính năng của mình
-      const biz = PLATFORM_ZALO ? `<div class="ord-biz"><p class="ord-eyebrow ord-eyebrow-gold">Dành cho chủ quán</p><a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="ord-biz-row"><span class="text-xl">🏪</span><span class="flex-1 min-w-0"><b class="block text-[14px]">${owner ? 'Đưa món của bạn lên khu Nổi bật' : 'Bạn là chủ quán?'}</b><span class="block text-[13px] text-gray-500">${free ? 'Còn ' + free + '/' + SPOT_MAX + ' vị trí, khách thấy ngay khi mở tab này' : 'Các vị trí đang kín, hỏi để xếp lịch'}</span></span><b class="shrink-0 text-[13px] text-gac">Hỏi giá ›</b></a></div>` : '';
-      return spotlightHtml() + recentHtml + together + biz;
+        ${PLATFORM_ZALO ? `<a href="https://zalo.me/${escQ(normPhone(PLATFORM_ZALO))}" target="_blank" rel="noopener" class="${rowCls}"><span class="text-xl">🏪</span><span class="flex-1 min-w-0"><b class="block text-[14px]">${owner ? 'Đưa món của bạn lên khu Nổi bật' : 'Bạn là chủ quán?'}</b><span class="block text-[13px] text-gray-500">${free ? 'Còn ' + free + '/' + SPOT_MAX + ' vị trí, khách thấy ngay khi mở tab này' : 'Các vị trí đang kín, hỏi để xếp lịch'}</span></span><b class="shrink-0 text-[13px] text-gac">Hỏi giá ›</b></a>` : ''}</div>`;
+      return spotlightHtml() + recentHtml + util;
     }
     const appLink = () => location.href.split('#')[0].split('?')[0];
     async function shareApp() {
@@ -2040,18 +2031,16 @@
     function copyAppLink() { const url = appLink(); try { navigator.clipboard.writeText(url).then(() => showToast('Đã sao chép link ShopFood. Dán gửi cho bạn bè nhé!'), () => showToast(url)); } catch { showToast(url); } }
     function ordersListHtml() {
       const mine = state.orders.filter(o => state.user && o.customerId === state.user.id);
-      const steam = '<svg class="ord-steam" viewBox="0 0 48 40" aria-hidden="true"><g fill="none" stroke-linecap="round"><path d="M14 30C9 25 19 22 14 15" stroke="#F2B134" stroke-width="3.4"/><path d="M24 30C18 23 30 19 24 9" stroke="#FF6B3D" stroke-width="3.4"/><path d="M34 30C29 25 39 22 34 15" stroke="#F2B134" stroke-width="3.4"/><path d="M8 36h32" stroke="#F2B134" stroke-opacity=".6" stroke-width="3"/></g></svg>';
-      if (!mine.length) return `<div class="ord-empty">${steam}<p class="font-display font-bold text-[20px] leading-tight">Chưa có đơn nào</p><p class="text-[14px] text-gray-500 leading-snug">Chọn món ngon quanh Trà Bồng. Đơn của bạn sẽ hiện ở đây để theo dõi từng bước.</p><button onclick="setTab('home')" class="ord-cta">Chọn món ngay</button></div>`;
-      const active = mine.filter(o => !isDone(o));
-      return active.length ? `<div class="ord-h"><h3>Đơn đang chạy</h3><span class="ord-pill">${active.length}</span></div>${active.map((o, i) => orderCardHtml(o, false, i)).join('')}`
-        : `<div class="ord-empty ord-empty-row">${steam}<div class="min-w-0 flex-1"><p class="font-bold text-[14px] leading-snug">Không có đơn đang chạy</p><p class="text-[13px] text-gray-500 leading-snug">Đặt lại món quen chỉ với một chạm.</p></div><button onclick="setTab('home')" class="ord-cta ord-cta-sm">Chọn món</button></div>`;
+      if (!mine.length) return `<div class="bg-white rounded-2xl border border-dashed border-gray-200 px-4 py-3 flex items-center justify-between gap-3"><p class="text-[13px] text-gray-500">Bạn chưa có đơn nào. Chọn món bên dưới nhé.</p><button onclick="setTab('home')" class="shrink-0 bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-[13px] font-bold">Xem thực đơn</button></div>`;
+      const active = mine.filter(o => !isDone(o)), done = mine.filter(isDone);
+      return active.length ? `<h3 class="font-extrabold text-[15px]">🔥 Đơn đang chạy (${active.length})</h3>${active.map((o, i) => orderCardHtml(o, false, i)).join('')}` : '<p class="text-[13px] text-gray-500">Hiện không có đơn nào đang chạy.</p>';
     }
     // Đơn đã xong nằm dưới cùng, thu gọn sẵn để nhường chỗ phía trên cho gợi ý quán và món
     function doneOrdersHtml() {
       const done = state.orders.filter(o => state.user && o.customerId === state.user.id && isDone(o)); if (!done.length) return '';
-      const open = state.showDone || done.some(o => state.openOrderId === o.id), list = open ? done : done.slice(0, 2);
-      const more = done.length > 2 ? `<button onclick="state.showDone = !${open}; if (${open}) state.openOrderId = 0; render();" class="ord-link">${open ? 'Thu gọn ▲' : 'Xem tất cả (' + done.length + ') ▾'}</button>` : '';
-      return `<div class="ord-h"><h3>Đơn gần đây</h3>${more}</div>` + list.map(o => state.openOrderId === o.id ? orderCardHtml(o, true) : orderRowHtml(o)).join('');
+      const open = state.showDone || done.some(o => state.openOrderId === o.id);
+      return `<button onclick="state.showDone = !${open}; if (${open}) state.openOrderId = 0; render();" class="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-3 h-11 text-[13px]"><span>🧾 Đơn đã xong (${done.length})</span><b class="text-gray-500">${open ? 'Thu gọn ▲' : 'Xem ▾'}</b></button>`
+        + (open ? done.map(o => state.openOrderId === o.id ? orderCardHtml(o, true) : orderRowHtml(o)).join('') : '');
     }
 
     // ===== NHÃN GHI CHÚ CỦA MÓN =====
@@ -2219,10 +2208,10 @@
     setInterval(() => { if (state.groupId && !document.hidden && !state.groupCheckout) loadGroup(true); }, 4000);
 
     // --- Giao diện nhóm ---
-    function groupRowHtml(rowCls) {   // tính năng phụ: một dòng gọn trong khối "mời bạn bè"
+    function groupEntryHtml() {   // tính năng phụ: chỉ một dòng gọn trong tab Đơn hàng
       if (state.groupReady === false) return '';
-      if (inGroup()) return `<button onclick="state.groupView=true; render();" class="${rowCls}"><span class="text-xl">👥</span><span class="flex-1 min-w-0"><b class="block text-[14px] truncate">Đang trong nhóm ${escQ(state.group ? state.group.title : '')}</b><span class="block text-[13px] text-gray-500">Xem món của cả nhóm</span></span><b class="shrink-0 text-[13px] text-gac">Xem nhóm ›</b></button>`;
-      return `<button onclick="openGroupAsk()" class="${rowCls}"><span class="text-xl">👥</span><span class="flex-1 min-w-0"><b class="block text-[14px]">Đặt chung với bạn bè</b><span class="block text-[13px] text-gray-500">Họp lớp, tiệc: mỗi người chọn món, một người chốt đơn</span></span><b class="shrink-0 text-[13px] text-gac">Tạo đơn nhóm ›</b></button>`;
+      if (inGroup()) return `<button onclick="state.groupView=true; render();" class="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-xl px-3 h-11 text-[13px]"><span class="truncate">👥 Đang trong nhóm <b>${escQ(state.group ? state.group.title : '')}</b></span><b class="shrink-0 text-emerald-700">Xem nhóm ›</b></button>`;
+      return `<button onclick="openGroupAsk()" class="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-xl px-3 h-11 text-[13px]"><span class="truncate">👥 Đặt chung với bạn bè (họp lớp, tiệc)</span><b class="shrink-0 text-emerald-700">Tạo đơn nhóm ›</b></button>`;
     }
     function groupBarHtml() {
       if (!inGroup() || state.groupView || state.showCheckout || state.sizePick) return '';
@@ -3063,7 +3052,7 @@
         html += `
           <div class="space-y-3">
             ${ordersHeadHtml()}
-            ${state.tableCtx ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[15px] text-emerald-900">🍽️ Bạn đang ở Bàn ${state.tableCtx.table}</b><button onclick="state.viewStoreId='${state.tableCtx.storeId}'; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại bàn</button></div>` : state.lockedStoreId ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[14px] text-emerald-900">🏪 Bạn đang đặt tại quán</b><button onclick="state.viewStoreId=state.lockedStoreId; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại quán</button></div>` : ''}${ordersListHtml()}${doneOrdersHtml()}${ordersExtrasHtml()}
+            ${state.tableCtx ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[15px] text-emerald-900">🍽️ Bạn đang ở Bàn ${state.tableCtx.table}</b><button onclick="state.viewStoreId='${state.tableCtx.storeId}'; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại bàn</button></div>` : state.lockedStoreId ? `<div class="rounded-2xl bg-emerald-50 border border-emerald-200 p-3 flex items-center justify-between gap-2"><b class="text-[14px] text-emerald-900">🏪 Bạn đang đặt tại quán</b><button onclick="state.viewStoreId=state.lockedStoreId; render();" class="px-3 rounded-xl bg-emerald-700 text-white text-[13px] font-bold">Quay lại quán</button></div>` : ''}${ordersListHtml()}${ordersExtrasHtml()}${doneOrdersHtml()}${groupEntryHtml()}
           </div>
         `;
       }
