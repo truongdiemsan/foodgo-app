@@ -12,6 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ShopFood">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="preconnect" href="https://rakzmchiogtdzewmnqtx.supabase.co" crossorigin>
   <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -32,7 +33,7 @@
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet"></noscript>
   <style>
     body { font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
     .font-display { font-family: Fraunces, Georgia, 'Times New Roman', serif; font-optical-sizing: auto; letter-spacing: -0.01em; }
@@ -43,6 +44,7 @@
     .pm-spark { position: absolute; color: #fff; text-shadow: 0 0 6px rgba(255,255,255,.9); animation: adSpark 2.4s ease-in-out infinite; pointer-events: none; }
     .feat-h{height:172px}
     .feat-w{width:calc(50% - 6px)}
+    img[src=""], img:not([src]) { opacity: 0; }
     .pm-in { animation: adIn .55s cubic-bezier(.2,.8,.2,1) both; }
     .pm-spin { position: absolute; inset: 0; border-radius: 9999px; background: conic-gradient(#f7c948, #fff6c4, #e09a00, #fff1a8, #f7c948); animation: adSpin 3.2s linear infinite; }
     .pm-wave { animation: adWave 6s ease-in-out infinite; }
@@ -68,7 +70,7 @@
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
-  <meta name="app-version" content="2026-11-27-speed">
+  <meta name="app-version" content="2026-11-28-counter">
   <meta name="color-scheme" content="dark">
   <style id="dark-theme">
     :root { color-scheme: dark; }
@@ -312,7 +314,7 @@
       checkoutNote: '',
       toast: '',
       isListening: false, user: null, feePayments: [], isAdmin: false, soundOn: (() => { try { return localStorage.getItem('fg_sound') !== '0'; } catch { return true; } })(), showCart: false, viewStoreId: '', sales: {}, ratings: {}, myReviews: {}, infoFoodId: '', foodStats: {}, openOrderId: '', tableCtx: null, sizePick: '', canInstall: false, showInstallHelp: false, installDismissed: (() => { try { const t = parseInt(localStorage.getItem('fg_install_dismiss') || '0'); return !!(t && Date.now() - t < 7 * 864e5); } catch { return false; } })(), tableReq: {}, tableOpen: [], tableCount: (() => { try { return parseInt(localStorage.getItem('fg_tables') || '0') || 0; } catch { return 0; } })(), showAuth: false, authMode: 'login', authEmailMode: false, authShowPass: false, authPhone: savedProfile.phone, authPass: '', checkoutConsent: false,
-      promos: [], promoReport: [], promoReady: null, adminPromoOpen: false, promoForm: null
+      promos: readStorage('fg_promos_v1', []), promoReport: [], promoReady: null, adminPromoOpen: false, promoForm: null
     };
 
     state.storeCat = 'Tất cả'; state.storeInfoOpen = false; state.showStoreQR = false; state.manageStoreId = ''; state.lockedStoreId = ''; state.lastOrderIds = []; state.cloudLoaded = false; // lockedStoreId: khách vào bằng QR của một quán thì chỉ thấy quán đó
@@ -326,27 +328,86 @@
       return loadCloudDataNow().finally(() => { cloudBusy = 0; if (cloudAgain) { cloudAgain = false; loadCloudSoon(); } });
     }
     function loadCloudSoon() { clearTimeout(cloudTimer); cloudTimer = setTimeout(loadCloudData, 600); }
+    // ===== TẢI DỮ LIỆU THEO TỪNG BƯỚC (để mở app nhanh) =====
+    // Bước 1: chữ (tên quán, món, giá) — rất nhẹ, hiện ngay. Bước 2: đơn hàng. Bước 3: ảnh, tải dần và nhớ lại trên máy.
+    const STORE_COLS = ['id,name,category,address,area_id,is_open,phone,owner_id,ship_info,pay_info,suspended,slogan,about,open_hours,bank_code,bank_no,bank_holder', 'id,name,category,address,area_id,is_open,phone,owner_id,ship_info,pay_info,suspended,slogan,about,open_hours'];
+    const FOOD_COLS = ['id,store_id,name,price,category,description,in_stock,note,sizes,opt_groups,options,toppings', 'id,store_id,name,price,category,description,in_stock,note,sizes,opt_groups'];
+    const liteOk = { stores: -2, foods: -2 };   // -2 chưa thử, -1 phải tải đủ, 0.. là cách chọn cột đã chạy được
+    async function selectLite(table, lists) {
+      const tryList = async (cols) => supabaseClient.from(table).select(cols).order('created_at', { ascending: false });
+      if (liteOk[table] >= 0) { const r = await tryList(lists[liteOk[table]]); if (!r.error) return { res: r, lite: true }; liteOk[table] = -2; }
+      if (liteOk[table] === -2) for (let i = 0; i < lists.length; i++) { const r = await tryList(lists[i]); if (!r.error) { liteOk[table] = i; return { res: r, lite: true }; } }
+      liteOk[table] = -1;
+      return { res: await supabaseClient.from(table).select('*').order('created_at', { ascending: false }), lite: false };
+    }
+    let imgIdb = null;
+    const idbReq = r => new Promise((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+    async function idbOpen() { if (imgIdb) return imgIdb; imgIdb = await new Promise((ok, no) => { const q = indexedDB.open('shopfood-img', 1); q.onupgradeneeded = () => q.result.createObjectStore('kv'); q.onsuccess = () => ok(q.result); q.onerror = () => no(q.error); }); return imgIdb; }
+    async function idbGet(k) { try { const d = await idbOpen(); return await idbReq(d.transaction('kv').objectStore('kv').get(k)); } catch { return null; } }
+    async function idbSet(k, v) { try { const d = await idbOpen(); await idbReq(d.transaction('kv', 'readwrite').objectStore('kv').put(v, k)); } catch {} }
+    let imgSaveTimer = null;
+    function imgCacheSave() {
+      clearTimeout(imgSaveTimer);
+      imgSaveTimer = setTimeout(() => {
+        const st = {}, fd = {};
+        state.stores.forEach(x => { if ((x.image && x.image.startsWith('data:')) || x.cover) st[x.id] = { image: x.image || '', cover: x.cover || '' }; });
+        state.foods.forEach(x => { if (x.image && x.image.startsWith('data:')) fd[x.id] = x.image; });
+        idbSet('stores', st); idbSet('foods', fd);
+      }, 1500);
+    }
+    // Đọc ảnh đã nhớ trên máy: lần mở sau ảnh hiện gần như ngay lập tức
+    async function imgCacheApply() {
+      const [st, fd] = await Promise.all([idbGet('stores'), idbGet('foods')]);
+      let changed = false;
+      state.stores.forEach(x => { const c = st && st[x.id]; if (c) { if (!x.image && c.image) { x.image = c.image; changed = true; } if (!x.cover && c.cover) { x.cover = c.cover; changed = true; } } });
+      state.foods.forEach(x => { const c = fd && fd[x.id]; if (c && !x.image) { x.image = c; changed = true; } });
+      if (changed) render();
+    }
+    let renderTimer = null;
+    const renderSoon = () => { clearTimeout(renderTimer); renderTimer = setTimeout(render, 150); };
+    let imgSession = false;
+    async function loadImages() {
+      if (!supabaseClient || liteOk.stores < 0 && liteOk.foods < 0) return;
+      let last = 0; try { last = +localStorage.getItem('fg_img_ts') || 0; } catch {}
+      const full = !imgSession && (Date.now() - last > 300000 || !state.foods.some(x => x.image)); imgSession = true;   // làm mới toàn bộ ảnh mỗi 5 phút, còn lại chỉ tải ảnh còn thiếu
+      const needS = state.stores.filter(x => full || !x.image).map(x => x.id), needF = state.foods.filter(x => full || !x.image).map(x => x.id);
+      const jobs = [];
+      if (needS.length) jobs.push(supabaseClient.from('stores').select('id,image,cover_image').in('id', needS).then(({ data }) => {
+        (data || []).forEach(r => { const x = state.stores.find(y => y.id === r.id); if (x) { if (r.image) x.image = clean(r.image); x.cover = clean(r.cover_image || ''); } }); renderSoon();
+      }));
+      for (let i = 0; i < needF.length; i += 10) { const ids = needF.slice(i, i + 10); jobs.push(supabaseClient.from('foods').select('id,image').in('id', ids).then(({ data }) => {
+        (data || []).forEach(r => { const x = state.foods.find(y => y.id === r.id); if (x && r.image) x.image = clean(r.image); }); renderSoon();
+      })); }
+      try { await Promise.all(jobs); if (full) try { localStorage.setItem('fg_img_ts', String(Date.now())); } catch {} imgCacheSave(); } catch (e) { console.error('Lỗi tải ảnh:', e); }
+    }
     async function loadCloudDataNow() {
       if (!supabaseClient) return;
       try {
-        const [storesRes, foodsRes, ordersRes] = await Promise.all([
-          supabaseClient.from('stores').select('*').order('created_at', { ascending: false }),
-          supabaseClient.from('foods').select('*').order('created_at', { ascending: false }),
-          supabaseClient.from('orders').select('*').order('created_at', { ascending: false })
-        ]);
-
+        const ordersP = Promise.resolve(supabaseClient.from('orders').select('*').order('created_at', { ascending: false }));   // chạy song song, không chặn việc hiện chữ
+        const [sx, fx] = await Promise.all([selectLite('stores', STORE_COLS), selectLite('foods', FOOD_COLS)]);
+        const storesRes = sx.res, foodsRes = fx.res;
+        const prevS = new Map(state.stores.map(x => [x.id, x])), prevF = new Map(state.foods.map(x => [x.id, x]));
         if (storesRes.data) {
           state.stores = storesRes.data.map(s => ({
             id: s.id, name: s.name, category: s.category, address: s.address,
-            areaId: s.area_id, image: s.image, isOpen: s.is_open, phone: s.phone, ownerId: s.owner_id, shipInfo: s.ship_info, payInfo: s.pay_info, suspended: s.suspended, cover: s.cover_image, slogan: s.slogan, about: s.about, openHours: s.open_hours, bankCode: s.bank_code || '', bankNo: s.bank_no || '', bankHolder: s.bank_holder || ''
+            areaId: s.area_id, image: sx.lite ? ((prevS.get(s.id) || {}).image || '') : s.image, isOpen: s.is_open, phone: s.phone, ownerId: s.owner_id, shipInfo: s.ship_info, payInfo: s.pay_info, suspended: s.suspended, cover: sx.lite ? ((prevS.get(s.id) || {}).cover || '') : s.cover_image, slogan: s.slogan, about: s.about, openHours: s.open_hours, bankCode: s.bank_code || '', bankNo: s.bank_no || '', bankHolder: s.bank_holder || ''
           }));
         }
         if (foodsRes.data) {
           state.foods = foodsRes.data.map(f => ({
             id: f.id, storeId: f.store_id, name: f.name, price: Number(f.price),
-            category: f.category, description: f.description, image: f.image, inStock: f.in_stock !== false, note: f.note || '', sizes: toSizes(f.sizes), groups: toGroups(f.opt_groups, f.options, f.toppings)
+            category: f.category, description: f.description, image: fx.lite ? ((prevF.get(f.id) || {}).image || '') : f.image, inStock: f.in_stock !== false, note: f.note || '', sizes: toSizes(f.sizes), groups: toGroups(f.opt_groups, f.options, f.toppings)
           }));
         }
+        state.stores = clean(state.stores); state.foods = clean(state.foods);
+        state.stores = state.stores.filter(s => !s.suspended || state.isAdmin || (state.user && s.ownerId === state.user.id));
+        const okIds = new Set(state.stores.map(s => s.id)); state.foods = state.foods.filter(f => okIds.has(f.storeId));
+        if (state.user) { state.profile.myStoreId = effStoreId(); if (state.profile.myStoreId) loadTableReqs(); }
+        state.cloudLoaded = true;
+        saveState();
+        render();            // chữ hiện ngay, chưa chờ ảnh và đơn hàng
+        if (sx.lite || fx.lite) loadImages();
+        const ordersRes = await ordersP;
         const keepLocal = state.orders.filter(o => o.unsynced);
         if (ordersRes.data) {
           state.orders = ordersRes.data.map(o => ({
@@ -354,14 +415,10 @@
             subtotal: Number(o.subtotal), shippingFee: Number(o.shipping_fee), total: Number(o.total),
             fulfillmentMethod: o.fulfillment_method, pickupTime: o.pickup_time, status: o.status,
             customerName: o.customer_name, customerPhone: o.customer_phone, deliveryAddress: o.delivery_address,
-            customerNote: o.customer_note, createdAt: o.created_at, customerId: o.customer_id, consent: o.marketing_consent
+            customerNote: o.customer_note, createdAt: o.created_at, customerId: String(o.id).startsWith('QT-') ? 'counter' : o.customer_id, consent: o.marketing_consent
           }));
         }
-        state.stores = clean(state.stores); state.foods = clean(state.foods); state.orders = clean(state.orders); const cloudIds = new Set(state.orders.map(o => o.id)); state.orders = [...keepLocal.filter(o => !cloudIds.has(o.id)), ...state.orders];
-        state.stores = state.stores.filter(s => !s.suspended || state.isAdmin || (state.user && s.ownerId === state.user.id));
-        const okIds = new Set(state.stores.map(s => s.id)); state.foods = state.foods.filter(f => okIds.has(f.storeId));
-        if (state.user) { state.profile.myStoreId = effStoreId(); if (state.profile.myStoreId) loadTableReqs(); }
-        state.cloudLoaded = true;
+        state.orders = clean(state.orders); const cloudIds = new Set(state.orders.map(o => o.id)); state.orders = [...keepLocal.filter(o => !cloudIds.has(o.id)), ...state.orders];
         detectNewOrders();
         saveState();
         render();
@@ -509,11 +566,12 @@
     const PLATFORM_PAY = 'STK: (điền số tài khoản của bạn) - Chủ TK: (tên)'; // hiện cho quán khi cần đóng phí
     const PLATFORM_ZALO = '0905978747';   // số điện thoại/Zalo của chủ app, VD '0912345678'. Hiện nút Gọi và Zalo cho chủ quán muốn mua quảng bá. Để trống thì chỉ hiện lời nhắn liên hệ.
     const COUNTED = ['CONFIRMED', 'DELIVERING', 'COMPLETED']; // chỉ tính đơn quán đã xác nhận
+    const isCounter = o => String(o.id || '').startsWith('QT-');   // đơn chủ quán tự tạo tại quầy: không tính vào phí tháng
     const feeFor = n => n <= 30 ? 0 : n <= 100 ? 99000 : n <= 200 ? 199000 : n <= 400 ? 349000 : 499000;
     const ymOf = t => { const d = new Date(t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); };
     function storeMonths(id) {
       const m = {};
-      state.orders.filter(o => o.storeId === id && COUNTED.includes(o.status)).forEach(o => { const k = ymOf(o.createdAt); m[k] = (m[k] || 0) + 1; });
+      state.orders.filter(o => o.storeId === id && COUNTED.includes(o.status) && !isCounter(o)).forEach(o => { const k = ymOf(o.createdAt); m[k] = (m[k] || 0) + 1; });
       return m;
     }
     function feeDue(id) { // các tháng đã qua có phí > 0
@@ -694,6 +752,97 @@
       return d.paid ? `<div class="rounded-xl bg-green-50 border border-green-300 p-2.5 flex items-center justify-between gap-2"><span class="text-green-900 font-bold">✅ Đã nhận cọc 30%: ${money(d.amount)}<span class="block font-normal text-green-800">Còn thu khi giao: ${money(d.total - d.amount)}</span></span>${isDone(o) ? '' : `<button onclick="confirmDeposit('${escQ(o.id)}', false)" class="shrink-0 text-[13px] font-bold text-gray-500 underline">Hoàn lại</button>`}</div>`
         : `<div class="rounded-xl bg-amber-50 border-2 border-amber-400 p-2.5 space-y-2"><p class="text-amber-900 font-bold">💰 Đơn nhóm${d.groupTitle ? ' “' + escQ(d.groupTitle) + '”' : ''}: khách chuyển cọc trước 30% = ${money(d.amount)}<span class="block font-normal text-amber-800">Kiểm tra tài khoản ngân hàng, nội dung có mã ${escQ(o.id)}. Còn thu khi giao: ${money(d.total - d.amount)}</span></p><button onclick="confirmDeposit('${escQ(o.id)}', true)" class="w-full bg-emerald-700 text-white rounded-xl py-3 font-extrabold">✅ Đã nhận ${money(d.amount)} tiền cọc</button></div>`;
     }
+    // ===== IN PHIẾU ĐƠN: phiếu đầy đủ (giao shipper, đưa khách) và phiếu bếp (không giá) =====
+    function printOrder(id) {
+      const o = state.orders.find(x => x.id === id); if (!o) return;
+      const s = state.stores.find(x => x.id === o.storeId) || {}, e = escQ;
+      const w = window.open('', '_blank');
+      if (!w) return showToast('Trình duyệt đang chặn cửa sổ in. Hãy cho phép rồi thử lại.');
+      const how = o.fulfillmentMethod === 'DINEIN' ? 'Tại bàn: ' + (o.deliveryAddress || '') : o.fulfillmentMethod === 'PICKUP' ? 'Khách tự lấy' + (o.pickupTime ? ' lúc ' + o.pickupTime : '') : 'GIAO TẬN NƠI';
+      const items = (o.items || []).map(i => `<tr><td class="q">${Number(i.quantity) || 0}×</td><td class="n"><b>${e(i.name)}</b>${i.desc ? `<br><small>${e(String(i.desc))}</small>` : ''}</td><td class="price r">${money((Number(i.unitPrice) || 0) * (Number(i.quantity) || 0))}</td></tr>`).join('');
+      const ship = Number(o.shippingFee) || 0, when = new Date(o.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const css = '@page{margin:4mm}*{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#000;margin:0 auto;max-width:300px;padding:8px}h1{font-size:19px;text-align:center;margin:0 0 2px}.c{text-align:center}.id{font-size:24px;font-weight:900;text-align:center;margin:4px 0}hr{border:0;border-top:1px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse}td{vertical-align:top;padding:3px 0}.q{width:34px;font-weight:700}.r{text-align:right;white-space:nowrap}small{color:#333}.tot td{font-size:16px;font-weight:900;padding-top:6px}.note{border:2px solid #000;padding:6px;margin:8px 0;font-weight:700}.bar{position:sticky;top:0;background:#fff;padding:6px 0;display:flex;gap:6px;border-bottom:1px solid #ccc;margin-bottom:8px}.bar button{flex:1;padding:10px 4px;font-size:14px;font-weight:700;border:1px solid #333;background:#fff;border-radius:8px}.bar .go{background:#111;color:#fff}body.k .price,body.k .money{display:none}body.k .n{font-size:17px}@media print{.bar{display:none}}';
+      const html = `<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Phiếu ${e(o.id)}</title><style>${css}</style></head><body>
+        <div class="bar"><button onclick="document.body.classList.remove('k')">Phiếu đầy đủ</button><button onclick="document.body.classList.add('k')">Phiếu bếp</button><button class="go" onclick="print()">🖨️ In</button></div>
+        <h1>${e(s.name || o.storeName || 'ShopFood')}</h1>${s.phone ? `<div class="c">ĐT: ${e(s.phone)}</div>` : ''}<hr>
+        <div class="id">${e(o.id)}</div><div class="c">${e(when)}</div><hr>
+        <div><b>${e(how)}</b></div>${o.fulfillmentMethod === 'DELIVERY' && o.deliveryAddress ? `<div>${e(o.deliveryAddress)}</div>` : ''}
+        <div>Khách: <b>${e(o.customerName || '')}</b>${o.customerPhone ? ' · ' + e(o.customerPhone) : ''}</div>
+        ${o.customerNote ? `<div class="note">GHI CHÚ: ${e(o.customerNote)}</div>` : ''}<hr>
+        <table>${items}</table><hr>
+        <table class="money"><tr><td>Tiền món</td><td class="r">${money(o.subtotal || 0)}</td></tr>${ship ? `<tr><td>Phí giao</td><td class="r">${money(ship)}</td></tr>` : ''}<tr class="tot"><td>TỔNG CỘNG</td><td class="r">${money(o.total || 0)}</td></tr></table>
+        <hr><div class="c money">Cảm ơn quý khách!</div></body></html>`;
+      w.document.write(html); w.document.close();
+    }
+    // ===== TẠO ĐƠN TẠI QUẦY: chủ quán ghi đơn khách đến mua, gọi điện hoặc nhắn Zalo =====
+    const counterStore = () => state.stores.find(x => x.id === effStoreId());
+    function counterOpen() { state.counter = { how: 'DINEIN', name: '', phone: '', addr: '', ship: '', note: '', done: true, print: false, qty: {}, size: {}, q: '', busy: false }; render(); }
+    function counterClose() { state.counter = null; render(); }
+    const cUnit = f => { const c = state.counter; return (f.sizes && f.sizes.length) ? (Number((f.sizes[c.size[f.id] || 0] || f.sizes[0]).price) || 0) : (Number(f.price) || 0); };
+    const cSizeName = f => (f.sizes && f.sizes.length) ? (f.sizes[state.counter.size[f.id] || 0] || f.sizes[0]).name : '';
+    function counterQty(id, d) { const c = state.counter; c.qty[id] = Math.max(0, Math.min(99, (c.qty[id] || 0) + d)); if (!c.qty[id]) delete c.qty[id]; render(); }
+    function counterTotals() {
+      const c = state.counter, s = counterStore(); if (!c || !s) return { sub: 0, ship: 0, total: 0, n: 0 };
+      const foods = state.foods.filter(f => f.storeId === s.id);
+      const sub = foods.reduce((a, f) => a + (c.qty[f.id] || 0) * cUnit(f), 0), n = Object.values(c.qty).reduce((a, b) => a + b, 0);
+      const ship = c.how === 'DELIVERY' ? parseShortPrice(c.ship) : 0;
+      return { sub, ship, total: sub + ship, n };
+    }
+    function counterHtml() {
+      const c = state.counter, s = counterStore(); if (!c || !s) return '';
+      const q = foldCh(c.q || ''), foods = state.foods.filter(f => f.storeId === s.id && f.inStock && (!q || foldCh(f.name).includes(q)));
+      const t = counterTotals();
+      const seg = (k, l) => `<button onclick="state.counter.how='${k}'; render();" class="flex-1 h-10 rounded-xl text-[13px] font-bold border ${c.how === k ? 'bg-nghe text-bark border-nghe' : 'bg-white text-gray-700'}">${l}</button>`;
+      const row = f => { const n = c.qty[f.id] || 0, hasSz = f.sizes && f.sizes.length;
+        return `<div class="flex items-center gap-2 py-2 ${n ? 'bg-amber-50 -mx-2 px-2 rounded-lg' : ''}"><div class="flex-1 min-w-0"><b class="block truncate text-[14px] text-gray-900">${escQ(f.name)}</b>${hasSz ? `<select onchange="state.counter.size['${f.id}']=+this.value; render();" class="text-[13px] border rounded-lg h-9 px-1 mt-0.5 bg-white">${f.sizes.map((z, i) => `<option value="${i}" ${(c.size[f.id] || 0) === i ? 'selected' : ''}>${escQ(z.name)} · ${money(z.price)}</option>`).join('')}</select>` : `<span class="text-[13px] text-gray-500">${money(f.price)}</span>`}</div>
+          <div class="flex items-center gap-1 shrink-0"><button onclick="counterQty('${f.id}',-1)" class="w-10 h-10 rounded-full border text-lg font-black ${n ? '' : 'opacity-30'}" aria-label="Bớt">−</button><b class="w-7 text-center text-[15px]">${n}</b><button onclick="counterQty('${f.id}',1)" class="w-10 h-10 rounded-full bg-emerald-700 text-white text-lg font-black" aria-label="Thêm">+</button></div></div>`; };
+      return `<div class="fixed inset-0 z-[60] bg-black/60 flex items-end justify-center" onclick="counterClose()"><div class="bg-white w-full max-w-md rounded-t-3xl max-h-[92vh] flex flex-col shadow-2xl" onclick="event.stopPropagation()">
+        <div class="flex items-center justify-between p-4 pb-2"><h3 class="font-extrabold text-[16px]">➕ Tạo đơn tại quầy</h3><button onclick="counterClose()" class="w-9 h-9 rounded-full bg-gray-100 font-black" aria-label="Đóng">✕</button></div>
+        <div data-scroll="counter" class="overflow-y-auto px-4 space-y-3 pb-3 text-[13px]">
+          <div class="flex gap-1.5">${seg('DINEIN', 'Tại quán')}${seg('PICKUP', 'Mang đi')}${seg('DELIVERY', 'Giao tận nơi')}</div>
+          <div class="grid grid-cols-2 gap-2"><input value="${attrQ(c.name)}" oninput="state.counter.name=this.value" class="field" placeholder="Tên khách" /><input value="${attrQ(c.phone)}" oninput="state.counter.phone=this.value" class="field" inputmode="tel" placeholder="Số điện thoại" /></div>
+          ${c.how === 'DELIVERY' ? `<input value="${attrQ(c.addr)}" oninput="state.counter.addr=this.value" class="field" placeholder="Địa chỉ giao hàng" /><input value="${attrQ(c.ship)}" oninput="state.counter.ship=this.value; counterTotalsUpdate()" class="field" inputmode="numeric" placeholder="Phí giao: gõ 15 hoặc 15000 (bỏ trống nếu không thu)" />` : c.how === 'DINEIN' ? `<input value="${attrQ(c.addr)}" oninput="state.counter.addr=this.value" class="field" placeholder="Bàn số hoặc số thẻ (không bắt buộc)" />` : ''}
+          <div><input id="counterQ" value="${attrQ(c.q)}" oninput="state.counter.q=this.value; render(); const i=document.getElementById('counterQ'); if(i){i.focus(); i.setSelectionRange(i.value.length,i.value.length);}" class="field" placeholder="Tìm món" />
+            <div class="divide-y divide-gray-100 mt-1">${foods.length ? foods.map(row).join('') : '<p class="text-center text-gray-500 py-4">Không có món nào đang bán.</p>'}</div></div>
+          <input value="${attrQ(c.note)}" oninput="state.counter.note=this.value" class="field" placeholder="Ghi chú đơn (ít cay, thêm đá...)" />
+          <label class="flex items-center gap-2 font-bold text-gray-800"><input type="checkbox" ${c.done ? 'checked' : ''} onchange="state.counter.done=this.checked; render();" /> Khách đã nhận và trả tiền (tính doanh thu luôn)</label>
+          <label class="flex items-center gap-2 text-gray-700"><input type="checkbox" ${c.print ? 'checked' : ''} onchange="state.counter.print=this.checked" /> In phiếu sau khi tạo</label>
+          <p class="text-gray-400">Đơn tại quầy không tính vào số đơn tính phí tháng. Món có tùy chọn thêm (topping...) thì ghi vào ô ghi chú.</p></div>
+        <div class="p-4 pt-2 border-t bg-white rounded-b-none"><div class="flex justify-between items-center mb-2"><span class="text-gray-600">${t.n} món${t.ship ? ' · phí giao ' + money(t.ship) : ''}</span><b id="counterTotal" class="text-[18px] text-emerald-900">${money(t.total)}</b></div>
+          <button onclick="counterCreate()" ${t.n && !c.busy ? '' : 'disabled'} class="w-full h-12 rounded-xl bg-emerald-700 text-white font-extrabold text-[15px] disabled:opacity-40">${c.busy ? 'Đang tạo...' : 'Tạo đơn'}</button></div></div></div>`;
+    }
+    function counterTotalsUpdate() { const e = document.getElementById('counterTotal'); if (e) e.textContent = money(counterTotals().total); }
+    async function counterCreate() {
+      const c = state.counter, s = counterStore(); if (!c || !s || c.busy) return;
+      const foods = state.foods.filter(f => f.storeId === s.id && c.qty[f.id]), t = counterTotals();
+      if (!foods.length) return showToast('Hãy chọn ít nhất một món.');
+      if (c.how === 'DELIVERY' && !c.addr.trim()) return showToast('Hãy nhập địa chỉ giao hàng.');
+      const ph = String(c.phone || '').replace(/\D/g, '');
+      if (ph && !/^0\d{9,10}$/.test(ph)) return showToast('Số điện thoại chưa đúng. Bỏ trống nếu không cần.');
+      const items = foods.map(f => { const sz = cSizeName(f); return { foodId: f.id, name: f.name + (sz ? ' (' + sz + ')' : ''), desc: sz ? 'Size ' + sz : '', unitPrice: cUnit(f), quantity: c.qty[f.id] }; });
+      const o = {
+        id: 'QT-' + Math.random().toString(36).slice(2, 7).toUpperCase(), storeId: s.id, storeName: s.name, storePhone: s.phone || '', items,
+        subtotal: t.sub, shippingFee: t.ship, total: t.total, fulfillmentMethod: c.how, pickupTime: null, status: c.done ? 'COMPLETED' : 'CONFIRMED',
+        customerName: clean(c.name).trim() || 'Khách tại quầy', customerPhone: ph, deliveryAddress: c.how === 'DELIVERY' ? clean(c.addr).trim() : c.how === 'DINEIN' ? (clean(c.addr).trim() || 'quán') : 'Khách mang đi',
+        customerNote: clean(c.note).trim(), createdAt: new Date().toISOString(), unsynced: !!supabaseClient, customerId: 'counter', consent: false
+      };
+      state.orders = [o, ...state.orders]; const wantPrint = c.print; state.counter = null; saveState(); render();
+      showToast('Đã tạo đơn ' + o.id + (c.done ? ' (đã tính doanh thu).' : '. Đơn đang chuẩn bị.'));
+      if (wantPrint) printOrder(o.id);
+      await counterSync(o);
+    }
+    // Gửi đơn tại quầy lên máy chủ. Nếu máy chủ không cho tạo thẳng đơn đã xong, tạo ở trạng thái chờ rồi chuyển trạng thái sau.
+    async function counterSync(o) {
+      if (!supabaseClient) return true;
+      const row = st => ({ id: o.id, store_id: o.storeId, store_name: o.storeName, items: o.items, subtotal: o.subtotal, shipping_fee: o.shippingFee, total: o.total, fulfillment_method: o.fulfillmentMethod, pickup_time: null, status: st, customer_name: o.customerName, customer_phone: o.customerPhone, delivery_address: o.deliveryAddress, customer_note: o.customerNote, created_at: o.createdAt, marketing_consent: false });
+      let r = await supabaseClient.from('orders').insert([row(o.status)]);
+      if (r.error && r.error.code !== '23505') {
+        r = await supabaseClient.from('orders').insert([row('PENDING_CONFIRMATION')]);
+        if (!r.error) { const u = await supabaseClient.from('orders').update({ status: o.status }).eq('id', o.id); if (u.error) showToast('Đơn đã lưu nhưng chưa chuyển được trạng thái. Hãy bấm cập nhật trạng thái trong đơn.'); }
+      }
+      if (r.error && r.error.code !== '23505') { console.error('Lỗi lưu đơn tại quầy:', r.error); showToast('⚠️ Đơn chưa gửi được lên hệ thống: ' + r.error.message); return false; }
+      o.unsynced = false; saveState(); render(); return true;
+    }
     function ownerOrderCard(o) {
       const pend = o.status === 'PENDING_CONFIRMATION', done = isDone(o), open = !done || state.orderOpen[o.id];
       const nx = NEXT[o.status], ph = String(o.customerPhone || '').trim();
@@ -705,17 +854,57 @@
         ${done && !open ? `<button onclick="state.orderOpen['${o.id}']=true; render();" class="w-full text-center text-[13px] font-bold text-sky-700">Xem chi tiết ▼</button>` : `
         ${call ? `<div class="flex gap-2">${call}</div>` : ''}
         <div class="space-y-1">${orderBodyHtml(o)}</div>
+        <button onclick="printOrder('${o.id}')" class="w-full h-11 border border-gray-300 rounded-xl text-[13px] font-bold text-gray-700 bg-white">🖨️ In phiếu đơn</button>
         ${done ? `<button onclick="state.orderOpen['${o.id}']=false; render();" class="w-full text-center text-[13px] font-bold text-gray-500">Thu gọn ▲</button>` : `
         <div class="flex items-center gap-2 pt-1">${nx ? `<button onclick="setOrderStatus('${o.id}','${nx[0]}')" class="flex-1 ${pend ? 'bg-rose-600' : 'bg-emerald-700'} text-white rounded-xl py-3.5 text-[15px] font-black shadow">${pend ? '✅ ' : ''}${nx[1]}</button>` : ''}${['PENDING_CONFIRMATION', 'CONFIRMED'].includes(o.status) ? `<button onclick="if(confirm('Hủy đơn ${o.id}?')) setOrderStatus('${o.id}','CANCELLED')" class="px-4 border border-rose-300 text-rose-600 rounded-xl py-3 font-bold bg-white">Hủy</button>` : ''}</div>`}`}
       </div>`;
+    }
+    // ===== BẢNG "HÔM NAY" CHO CHỦ QUÁN: doanh thu, số đơn, đơn theo trạng thái, món bán chạy =====
+    const OWN_RANGES = [['today', 'Hôm nay', 1], ['7d', '7 ngày', 7], ['30d', '30 ngày', 30]];
+    function ownRange() {
+      const days = (OWN_RANGES.find(r => r[0] === (state.ownRange || 'today')) || OWN_RANGES[0])[2];
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      const start = d.getTime() - (days - 1) * 86400000;
+      return { days, start, prevStart: start - days * 86400000 };
+    }
+    const ownT = o => new Date(o.createdAt).getTime() || 0;
+    function ownerStatsHtml(orders) {
+      const R = ownRange(), cur = orders.filter(o => ownT(o) >= R.start), prev = orders.filter(o => ownT(o) >= R.prevStart && ownT(o) < R.start);
+      const rev = l => l.filter(o => o.status === 'COMPLETED').reduce((a, o) => a + (Number(o.total) || 0), 0);
+      const cnt = l => l.filter(o => o.status !== 'CANCELLED').length;
+      const revN = rev(cur), revP = rev(prev), nN = cnt(cur), nP = cnt(prev);
+      const label = (state.ownRange || 'today') === 'today' ? 'hôm qua' : R.days + ' ngày trước đó';
+      const cmp = (a, b, unit) => b > 0 ? `<span class="${a >= b ? 'text-emerald-700' : 'text-rose-600'} font-bold">${a >= b ? '▲' : '▼'} ${Math.abs(Math.round((a - b) / b * 100))}%</span> <span class="text-gray-400">so với ${label}</span>` : (a > 0 ? `<span class="text-gray-400">${label} chưa có</span>` : '');
+      const open = st => orders.filter(o => o.status === st).length, inR = st => cur.filter(o => o.status === st).length;
+      const sel = state.ownStatus || '';
+      const row = (st, n, note) => `<button onclick="state.ownStatus=${sel === st ? "''" : `'${st}'`}; render();" class="w-full flex items-center gap-2 px-3 h-11 text-left ${sel === st ? 'bg-amber-50' : ''}"><span class="w-1 h-5 rounded-full ${barColor[st] || 'bg-rose-500'}"></span><span class="flex-1 text-[14px] font-bold text-gray-800">${STATUS[st][0]}${note ? ` <span class="text-[12px] font-normal text-gray-400">${note}</span>` : ''}</span><b class="text-[15px] ${n && (st === 'PENDING_CONFIRMATION') ? 'text-rose-600' : 'text-gray-900'}">${n}</b><span class="text-gray-400">›</span></button>`;
+      const top = {}; cur.filter(o => o.status === 'COMPLETED').forEach(o => (o.items || []).forEach(i => { const k = String(i.name || '').replace(/\s*\(.*$/, ''); if (k) top[k] = (top[k] || 0) + (Number(i.quantity) || 0); }));
+      const tops = Object.entries(top).sort((a, b) => b[1] - a[1]).slice(0, 3);
+      return `<section class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="px-3 pt-3 space-y-2"><h2 class="font-extrabold text-[17px] text-gray-900">📊 Kết quả bán hàng</h2>
+          <div class="grid grid-cols-3 gap-1.5">${OWN_RANGES.map(r => `<button onclick="state.ownRange='${r[0]}'; state.ownStatus=''; render();" class="w-full whitespace-nowrap h-10 rounded-full text-[13px] font-bold border ${(state.ownRange || 'today') === r[0] ? 'bg-nghe text-bark border-nghe' : 'bg-white text-gray-600'}">${r[1]}</button>`).join('')}</div></div>
+        <div class="grid grid-cols-2 gap-2 p-3">
+          <div class="rounded-xl bg-emerald-50 p-3"><p class="text-[12px] text-gray-500">Doanh thu (đơn hoàn tất)</p><b class="block text-[20px] leading-tight text-emerald-900">${money(revN)}</b><p class="text-[12px] mt-0.5">${cmp(revN, revP)}</p></div>
+          <div class="rounded-xl bg-amber-50 p-3"><p class="text-[12px] text-gray-500">Số đơn (không tính đã hủy)</p><b class="block text-[20px] leading-tight text-amber-900">${nN}</b><p class="text-[12px] mt-0.5">${cmp(nN, nP)}</p></div></div>
+        <div class="divide-y divide-gray-100 border-t border-gray-100">
+          ${row('PENDING_CONFIRMATION', open('PENDING_CONFIRMATION'), 'đang có')}${row('CONFIRMED', open('CONFIRMED'), 'đang có')}${row('DELIVERING', open('DELIVERING'), 'đang có')}${row('COMPLETED', inR('COMPLETED'), 'trong kỳ')}${row('CANCELLED', inR('CANCELLED'), 'trong kỳ')}</div>
+        ${tops.length ? `<p class="px-3 py-2.5 border-t border-gray-100 text-[13px] text-gray-600">🔥 <b>Bán chạy:</b> ${tops.map(x => escQ(x[0]) + ' ×' + x[1]).join(' · ')}</p>` : ''}
+      </section>`;
     }
     function ownerOrdersHtml(orders) {
       const t = o => new Date(o.createdAt).getTime() || 0;
       const active = orders.filter(o => !isDone(o)).sort((a, b) => (b.status === 'PENDING_CONFIRMATION') - (a.status === 'PENDING_CONFIRMATION') || t(a) - t(b));
       const done = orders.filter(isDone).sort((a, b) => t(b) - t(a)).slice(0, 30);
       const pn = active.filter(o => o.status === 'PENDING_CONFIRMATION').length;
+      if (state.ownStatus) {
+        const st = state.ownStatus, R = ownRange(), isEnd = st === 'COMPLETED' || st === 'CANCELLED';
+        const list = orders.filter(o => o.status === st && (!isEnd || ownT(o) >= R.start)).sort((a, b) => ownT(b) - ownT(a)).slice(0, 50);
+        return `<section class="space-y-2.5"><div class="flex items-center justify-between gap-2"><h2 class="font-extrabold text-[17px] text-gray-900">🧾 ${STATUS[st][0]} <span class="text-[13px] text-gray-400 font-bold">(${list.length})</span></h2><button onclick="state.ownStatus=''; render();" class="px-3 h-9 rounded-full border text-[13px] font-bold text-gray-700 bg-white">✕ Xem tất cả</button></div>
+          ${list.length ? list.map(ownerOrderCard).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Không có đơn nào ở trạng thái này.</div>'}</section>`;
+      }
       return `<section class="space-y-2.5">
         <div class="flex items-center justify-between"><h2 class="font-extrabold text-[17px] text-gray-900">🧾 Đơn hàng</h2><span class="text-[13px] text-gray-500">${pn ? `<b class="text-rose-600">${pn} chờ xác nhận</b> · ` : ''}${active.length} đang xử lý</span></div>
+        <button onclick="counterOpen()" class="w-full h-11 rounded-xl bg-emerald-700 text-white text-[14px] font-extrabold shadow">➕ Tạo đơn tại quầy</button>
         ${active.length ? active.map(ownerOrderCard).join('') : '<div class="bg-white rounded-2xl border border-dashed border-gray-300 p-5 text-center text-[13px] text-gray-500">Chưa có đơn nào đang xử lý.<br>Khi khách đặt món, đơn hiện ở đây kèm chuông báo.</div>'}
         ${done.length ? `<button onclick="state.showDone=!state.showDone; render();" class="w-full bg-white border border-gray-200 rounded-2xl py-3 text-[14px] font-bold text-gray-700">${state.showDone ? '▲ Ẩn' : '▼ Xem'} đơn đã xong (${done.length})</button>${state.showDone ? done.map(ownerOrderCard).join('') : ''}` : ''}
       </section>`;
@@ -783,6 +972,7 @@
         ${ownerAlertSetupHtml()}
         ${s.suspended ? '<div class="rounded-xl bg-rose-100 text-rose-800 p-3 text-[13px] font-bold">⛔ Quán đang bị tạm ẩn vì quá hạn đóng phí. Đóng xong, quản trị sẽ mở lại.</div>' : ''}
         ${tableRequestsHtml()}
+        ${ownerStatsHtml(orders)}
         ${ownerOrdersHtml(orders)}
         ${ownerMenuHtml(foods)}
         ${ownerSettingsHtml(s)}`;
@@ -852,11 +1042,97 @@
         ${list.length ? list.map(row).join('') : '<p class="text-center text-[13px] text-gray-500 py-6">Không có quán phù hợp.</p>'}</div>`;
     }
 
+    // ===== TÀI KHOẢN ADMIN: đổi mật khẩu + công cụ quản trị =====
+    function csvDownload(name, rows) {
+      const esc = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+      const blob = new Blob(['\ufeff' + rows.map(r => r.map(esc).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }
+    function exportStoresCsv() {
+      const ym = new Date().toISOString().slice(0, 7);
+      csvDownload('shopfood-quan-' + ym + '.csv', [['Tên quán', 'Số điện thoại', 'Địa chỉ', 'Trạng thái', 'Số đơn tháng này']].concat(state.stores.map(s => [s.name, s.phone || '', s.address || '', s.suspended ? 'Đang ẩn' : s.isOpen ? 'Mở' : 'Nghỉ', state.orders.filter(o => o.storeId === s.id && o.status !== 'CANCELLED' && String(o.createdAt || '').slice(0, 7) === ym).length])));
+      showToast('Đã tạo file danh sách quán.');
+    }
+    function exportOrdersCsv() {
+      const ym = new Date().toISOString().slice(0, 7), list = state.orders.filter(o => String(o.createdAt || '').slice(0, 7) === ym);
+      csvDownload('shopfood-don-' + ym + '.csv', [['Mã đơn', 'Quán', 'Ngày', 'Trạng thái', 'Tổng tiền', 'Hình thức']].concat(list.map(o => [o.id, o.storeName || '', new Date(o.createdAt).toLocaleString('vi-VN'), o.status, o.total, o.method || o.fulfillmentMethod || ''])));
+      showToast('Đã tạo file đơn tháng này (' + list.length + ' đơn).');
+    }
+    function copyAppLink() { copyTxt(appBaseUrl()); showToast('Đã sao chép link app.'); }
+    async function changeMyPassword() {
+      const w = state.pw || {};
+      if (!supabaseClient || !state.user || !state.user.email) { showToast('Bạn chưa đăng nhập hoặc chưa kết nối được máy chủ.'); return; }
+      if (!w.cur) { showToast('Hãy nhập mật khẩu hiện tại.'); return; }
+      if ((w.nw || '').length < 8) { showToast('Mật khẩu mới cần ít nhất 8 ký tự.'); return; }
+      if (w.nw !== w.nw2) { showToast('Hai ô mật khẩu mới chưa giống nhau.'); return; }
+      if (w.nw === w.cur) { showToast('Mật khẩu mới phải khác mật khẩu cũ.'); return; }
+      state.pw.busy = true; render();
+      try {
+        const chk = await supabaseClient.auth.signInWithPassword({ email: state.user.email, password: w.cur });
+        if (chk.error) throw new Error('Mật khẩu hiện tại chưa đúng.');
+        const up = await supabaseClient.auth.updateUser({ password: w.nw });
+        if (up.error) throw new Error(up.error.message || 'Không đổi được mật khẩu.');
+        state.pw = null; state.pwOpen = false; showToast('Đã đổi mật khẩu.');
+      } catch (e) { if (state.pw) state.pw.busy = false; showToast(e.message || 'Không đổi được mật khẩu.'); }
+      render();
+    }
+    function adminAccountHtml() {
+      const w = state.pw || (state.pw = { cur: '', nw: '', nw2: '', busy: false });
+      const inp = (k, t, ph) => `<input type="password" autocomplete="${k === 'cur' ? 'current-password' : 'new-password'}" value="${attrQ(w[k])}" oninput="state.pw.${k}=this.value" placeholder="${ph}" class="field" />`;
+      const rowBtn = (on, ic, t) => `<button onclick="${on}" class="w-full flex items-center gap-2 px-3 h-11 rounded-xl border text-left text-[13px] font-bold text-gray-800"><span>${ic}</span><span class="flex-1">${t}</span><span class="text-gray-400">›</span></button>`;
+      return `<div class="space-y-3">
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
+          <div class="flex items-center justify-between"><h2 class="font-extrabold text-base text-gray-900">🔐 Tài khoản quản trị</h2><span class="text-[12px] font-bold text-sky-600">Quản trị viên</span></div>
+          <p class="text-[13px] text-gray-500">${accLoginLabel()}</p>
+          ${state.pwOpen ? `<div class="space-y-2">${inp('cur', 'p', 'Mật khẩu hiện tại')}${inp('nw', 'p', 'Mật khẩu mới (từ 8 ký tự)')}${inp('nw2', 'p', 'Nhập lại mật khẩu mới')}
+            <div class="grid grid-cols-2 gap-2"><button onclick="state.pwOpen=false; state.pw=null; render();" class="border h-11 rounded-xl text-[13px] font-bold text-gray-600">Hủy</button><button onclick="changeMyPassword()" ${w.busy ? 'disabled' : ''} class="bg-emerald-700 text-white h-11 rounded-xl text-[13px] font-extrabold">${w.busy ? 'Đang đổi...' : 'Đổi mật khẩu'}</button></div></div>` : rowBtn("state.pwOpen=true; render();", '🔑', 'Đổi mật khẩu')}
+          <button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border h-11 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button>
+        </div>
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-2 shadow-sm">
+          <h2 class="font-extrabold text-base text-gray-900">🧰 Công cụ quản trị</h2>
+          ${rowBtn('exportStoresCsv()', '📄', 'Tải danh sách quán (Excel)')}
+          ${rowBtn('exportOrdersCsv()', '🧾', 'Tải đơn tháng này (Excel)')}
+          ${rowBtn('copyAppLink()', '🔗', 'Sao chép link app')}
+          <div class="rounded-xl border text-[13px]"><button onclick="state.adminQr=!state.adminQr; render();" class="w-full flex items-center justify-between px-3 h-10 font-bold text-gray-800"><span>📱 Mã QR của app</span><span class="text-gray-400 text-[12px]">${state.adminQr ? '▲' : '▼'}</span></button>${state.adminQr ? (location.protocol === 'file:' ? '<p class="px-3 pb-3 text-gray-500">Mở app qua địa chỉ web để có mã QR.</p>' : `<div class="px-3 pb-3 text-center space-y-2"><img src="${qrImg(appBaseUrl(), 220)}" class="w-36 h-36 border rounded-lg inline-block" /><p class="text-gray-400 break-all text-[12px]">${appBaseUrl()}</p><button onclick="printAppQR()" class="w-full bg-emerald-700 text-white h-10 rounded-xl font-bold">🖨️ In mã QR</button></div>`) : ''}</div>
+          ${installCardHtml()}
+        </div></div>`;
+    }
+
+    // ===== TAB TÀI KHOẢN CỦA KHÁCH: nói rõ từng khung dùng để làm gì =====
+    function nextTierText(pt) { return pt >= 300 ? 'Bạn đang ở hạng cao nhất.' : pt >= 100 ? 'Còn ' + (300 - pt) + ' điểm nữa lên hạng Vàng.' : 'Còn ' + (100 - pt) + ' điểm nữa lên hạng Bạc.'; }
+    function customerAccountHtml() {
+      const logged = hasAccount(), pt = myPoints(), p = state.profile, saved = !!(p.name && p.phone);
+      const lbl = (t, hint) => `<span class="block text-[13px] font-bold text-gray-700">${t}</span>${hint ? `<span class="block text-[12px] text-gray-400 -mt-0.5 mb-0.5">${hint}</span>` : ''}`;
+      const accountCard = logged
+        ? `<div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
+            <div class="flex items-start justify-between gap-2"><div class="min-w-0"><h2 class="font-extrabold text-base text-gray-900">⭐ Hội viên ${tierOf(pt).replace(/^\S+\s/, '')}</h2><p class="text-[13px] text-gray-500 truncate">${accLoginLabel()}</p></div><b class="shrink-0 text-[18px] text-emerald-800">${pt} điểm</b></div>
+            <p class="text-[13px] text-gray-500">${nextTierText(pt)} Mỗi 1.000đ đơn hoàn tất được 1 điểm.</p>
+            <button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border h-11 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button></div>`
+        : `<div class="bg-white rounded-2xl border border-amber-200 p-4 space-y-3 shadow-sm">
+            <div><h2 class="font-extrabold text-base text-gray-900">🔑 Tạo tài khoản bằng số điện thoại</h2><p class="text-[13px] text-gray-500">Bạn vẫn đặt món được mà không cần tài khoản. Có tài khoản sẽ tiện hơn:</p></div>
+            <ul class="text-[13px] text-gray-700 space-y-1.5"><li>✓ Giữ lịch sử đơn khi đổi điện thoại hoặc xóa dữ liệu</li><li>✓ Tích điểm: 1.000đ được 1 điểm, lên hạng Bạc, Vàng</li><li>✓ Thông tin nhận hàng dùng được trên mọi máy</li></ul>
+            <button onclick="state.showAuth=true; render();" class="w-full bg-nghe text-bark h-12 rounded-xl text-[15px] font-extrabold active:scale-95 transition">Đăng nhập / Tạo tài khoản</button></div>`;
+      const where = logged ? 'Đã lưu vào tài khoản, dùng được trên mọi máy.' : 'Đang lưu trên máy này. Đăng nhập để dùng trên máy khác.';
+      const infoBody = accEditing()
+        ? `<label class="block space-y-1">${lbl('Tên người nhận')}<input value="${escQ(p.name)}" oninput="state.profile.name=this.value;" class="field" placeholder="VD: Nguyễn Văn A" /></label>
+            <label class="block space-y-1">${lbl('Số điện thoại / Zalo', 'Quán gọi hoặc nhắn số này khi giao món')}<input value="${escQ(p.phone)}" oninput="state.profile.phone=this.value;" class="field" placeholder="VD: 0905 123 456" inputmode="tel" /></label>
+            <label class="block space-y-1">${lbl('Địa chỉ giao hàng', 'Ghi thôn/xóm và chỗ dễ tìm để giao nhanh hơn')}<textarea oninput="state.profile.address=this.value;" class="field min-h-16" placeholder="VD: Thôn 2, xã Trà Bồng, gần chợ">${escQ(p.address || '')}</textarea></label>
+            <button onclick="saveProfile()" class="w-full bg-emerald-700 text-white h-12 rounded-xl text-[14px] font-extrabold">Lưu để lần sau tự điền</button>
+            ${saved ? '<button onclick="cancelAccEdit()" class="w-full border h-11 rounded-xl text-[13px] font-bold text-gray-600">Hủy</button>' : ''}`
+        : `<div class="rounded-xl bg-gray-50 border p-3 space-y-1 text-[13px]"><p class="font-bold text-gray-900">${escQ(p.name)} · ${escQ(p.phone)}</p><p class="text-gray-600 whitespace-pre-line">${p.address ? escQ(p.address) : 'Chưa có địa chỉ'}</p></div>
+            <button onclick="startAccEdit()" class="w-full border border-emerald-700 text-emerald-800 h-11 rounded-xl text-[13px] font-extrabold">✏️ Sửa thông tin</button>`;
+      return `<div class="space-y-3">${accountCard}
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
+          <div><h2 class="font-extrabold text-base text-gray-900">📍 Thông tin nhận hàng</h2><p class="text-[13px] text-gray-500">Tự điền vào đơn mỗi khi bạn đặt món, không phải gõ lại. ${where}</p></div>
+          ${infoBody}</div>
+        <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm"><h2 class="font-extrabold text-base text-gray-900">🧰 Tiện ích và hỗ trợ</h2>${installCardHtml()}${supportCardHtml()}</div></div>`;
+    }
+
     function adminHtml() {
       const cur = ymOf(Date.now());
       const rows = state.stores.map(s => ({ s, n: storeMonths(s.id)[cur] || 0, dues: feeDue(s.id).filter(d => !d.paid) })).sort((a, b) => b.dues.filter(isLate).length - a.dues.filter(isLate).length);
       return `<div class="space-y-3">
-        <div class="bg-white rounded-xl border shadow-sm text-[13px]"><button onclick="state.adminQr=!state.adminQr; render();" class="w-full flex items-center justify-between px-3 h-10 font-bold text-gray-800"><span>📱 Mã QR của app</span><span class="text-gray-400 text-[12px]">${state.adminQr ? '▲' : '▼'}</span></button>${state.adminQr ? (location.protocol === 'file:' ? '<p class="px-3 pb-3 text-gray-500">Mở app qua địa chỉ web để có mã QR.</p>' : `<div class="px-3 pb-3 text-center space-y-2"><img src="${qrImg(appBaseUrl(), 220)}" class="w-36 h-36 border rounded-lg inline-block" /><p class="text-gray-400 break-all text-[12px]">${appBaseUrl()}</p><button onclick="printAppQR()" class="w-full bg-emerald-700 text-white h-10 rounded-xl font-bold">🖨️ In mã QR</button></div>`) : ''}</div>
         <div class="rounded-2xl bg-emerald-900 text-white p-4"><p class="text-[13px] text-emerald-200 font-bold">QUẢN TRỊ NỀN TẢNG</p>
           <p class="text-sm font-black">${rows.length} quán · phí tạm tính tháng này ${money(rows.reduce((a, r) => a + feeFor(r.n), 0))}</p>
           <button onclick="hideOverdue()" class="mt-2 bg-amber-400 text-emerald-950 px-3 py-1.5 rounded-lg text-[13px] font-extrabold">Ẩn các quán quá hạn</button></div>
@@ -875,10 +1151,10 @@
     }
     function saveProfile(silent) {
       saveState();
-      if (!supabaseClient || !state.user) return silent || showToast('Hãy đăng nhập để lưu thông tin vào tài khoản.');
+      if (!supabaseClient || !hasAccount()) { if (!silent) { state.accEditing = false; showToast('Đã lưu trên máy này. Đăng nhập để dùng trên máy khác.'); render(); } return; }
       const p = state.profile; if (!silent) state.accEditing = false;
       supabaseClient.from('profiles').upsert({ user_id: state.user.id, name: p.name, phone: p.phone, address: p.address, updated_at: new Date().toISOString() })
-        .then(({ error }) => { if (error) showToast('Không lưu được: ' + error.message); else if (!silent) showToast('Đã lưu thông tin tài khoản.'); });
+        .then(({ error }) => { if (error) showToast('Không lưu được: ' + error.message); else if (!silent) { showToast('Đã lưu vào tài khoản.'); render(); } });
     }
 
     function updatePricePreview() {
@@ -922,7 +1198,8 @@
     }
 
     // ===== CHI TIẾT ĐƠN HÀNG · GỬI ĐƠN LÊN CLOUD =====
-    const toItems = v => { if (Array.isArray(v)) return v; try { const j = JSON.parse(v); return Array.isArray(j) ? j : []; } catch { return []; } };
+    const noImg = i => (i && i.image) ? (({ image, ...r }) => r)(i) : i;   // ảnh món không cần nằm trong đơn, bỏ cho nhẹ
+    const toItems = v => { if (Array.isArray(v)) return v.map(noImg); try { const j = JSON.parse(v); return Array.isArray(j) ? j.map(noImg) : []; } catch { return []; } };
     function orderBodyHtml(o) {
       const items = (o.items || []).map(i => `<div class="flex justify-between text-gray-700"><span>${escQ(i.name)} <span class="text-gray-400">× ${i.quantity} · ${money(i.unitPrice)}</span>${i.desc ? `<br><span class="text-[13px] text-gray-500">${String(i.desc).replace(/[<>]/g, '')}</span>` : ''}</span><b>${money(i.unitPrice * i.quantity)}</b></div>`).join('');
       const how = o.fulfillmentMethod === 'DINEIN' ? '🍽️ Phục vụ tại ' + escQ(o.deliveryAddress || 'bàn') : o.fulfillmentMethod === 'PICKUP' ? 'Khách tự đến lấy' + (o.pickupTime ? ' lúc ' + escQ(o.pickupTime) : '') : 'Giao tận nơi: ' + escQ(o.deliveryAddress || '');
@@ -1046,7 +1323,7 @@
     function profileCardHtml(s) {
       const hasInfo = s.cover || s.slogan || s.about || s.openHours;
       const editing = state.profileEditing === undefined ? !hasInfo : state.profileEditing;
-      if (editing && (!state.storeEdit || state.storeEdit.id !== s.id)) state.storeEdit = { id: s.id, cover: s.cover || '', image: s.image || '', slogan: s.slogan || '', about: s.about || '', hours: s.openHours || '' };
+      if (editing && (!state.storeEdit || state.storeEdit.id !== s.id)) state.storeEdit = { id: s.id, name: s.name || '', cover: s.cover || '', image: s.image || '', slogan: s.slogan || '', about: s.about || '', hours: s.openHours || '' };
       const e = editing ? state.storeEdit : { cover: s.cover || '', image: s.image || '', slogan: s.slogan || '', about: s.about || '', hours: s.openHours || '' };
       const q = v => String(v).replace(/"/g, '&quot;');
       const head = `<div class="relative h-32 bg-gradient-to-r from-emerald-800 to-teal-600">${e.cover ? `<img loading="lazy" decoding="async" src="${e.cover}" class="w-full h-full object-cover" />` : '<p class="absolute inset-0 flex items-center justify-center text-emerald-100 font-bold">Chưa có ảnh bìa</p>'}</div>
@@ -1063,6 +1340,7 @@
       return `<div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden text-[13px]">${head}
         <div class="p-3 space-y-2">
           <h3 class="font-extrabold text-sm text-gray-800">Trang giới thiệu quán (khách thấy khi bấm vào quán)</h3>
+          <label class="block space-y-1"><span class="font-bold">Tên quán</span><input value="${q(e.name)}" oninput="state.storeEdit.name=this.value;" maxlength="40" class="field" placeholder="Tên quán hiển thị cho khách" /></label>
           <label class="block space-y-1"><span class="font-bold">Ảnh bìa (banner)</span><input type="file" accept="image/*" onchange="handleImageUpload(this, 700, url => state.storeEdit.cover = url)" class="field" /></label>
           <label class="block space-y-1"><span class="font-bold">Ảnh đại diện quán (logo)</span><input type="file" accept="image/*" onchange="handleImageUpload(this, 300, url => state.storeEdit.image = url)" class="field" /></label>
           <label class="block space-y-1"><span class="font-bold">Câu giới thiệu ngắn</span><input value="${q(e.slogan)}" oninput="state.storeEdit.slogan=this.value;" class="field" placeholder="VD: Gà nướng mật ong, giao nóng trong 20 phút" /></label>
@@ -1073,9 +1351,10 @@
     }
     function saveStoreProfile() {
       const s = state.stores.find(x => x.id === state.profile.myStoreId), e = state.storeEdit; if (!s || !e) return;
-      Object.assign(s, { cover: e.cover, image: e.image || s.image, slogan: e.slogan.trim(), about: e.about.trim(), openHours: e.hours.trim() });
-      state.profileEditing = false; saveState(); showToast('Đã lưu trang giới thiệu quán.');
-      if (supabaseClient) supabaseClient.from('stores').update({ cover_image: s.cover, image: s.image, slogan: s.slogan, about: s.about, open_hours: s.openHours }).eq('id', s.id)
+      const nm = clean(String(e.name || '')).trim().slice(0, 40); if (nm.length < 2) { showToast('Tên quán cần ít nhất 2 ký tự.'); return; }
+      Object.assign(s, { name: nm, cover: e.cover, image: e.image || s.image, slogan: e.slogan.trim(), about: e.about.trim(), openHours: e.hours.trim() });
+      state.profileEditing = false; saveState(); showToast('Đã lưu thông tin quán.');
+      if (supabaseClient) supabaseClient.from('stores').update({ name: s.name, cover_image: s.cover, image: s.image, slogan: s.slogan, about: s.about, open_hours: s.openHours }).eq('id', s.id)
         .then(({ error }) => { if (error) showToast('Chưa lưu được lên máy chủ: ' + error.message); });
     }
 
@@ -1152,6 +1431,7 @@
         const r = await supabaseClient.rpc('active_promos');
         state.promos = r.error ? [] : (r.data || []).map(p => ({ id: p.id, storeId: p.store_id, foodId: p.food_id, slot: p.slot, startsAt: p.starts_at, endsAt: p.ends_at }));
         state.promos.forEach(p => p.slot = normSlot(p.slot));
+        if (!r.error) try { localStorage.setItem('fg_promos_v1', JSON.stringify(state.promos)); } catch {}
       } catch { state.promos = []; }
     }
     const n0 = v => Number(v) || 0;
@@ -1459,7 +1739,7 @@
       if (!supabaseClient) return;
       let [a, b, c] = await Promise.all([
         supabaseClient.rpc('food_stats'), supabaseClient.from('store_ratings').select('*'),
-        state.user ? supabaseClient.from('reviews').select('order_id,stars').eq('user_id', state.user.id) : Promise.resolve({ data: [] }), loadPromos()]);
+        state.user ? supabaseClient.from('reviews').select('order_id,stars').eq('user_id', state.user.id) : Promise.resolve({ data: [] })]);
       if (a.error) a = await supabaseClient.rpc('food_sales'); // dự phòng nếu chưa chạy SQL mới
       state.sales = {}; state.foodStats = {};
       (a.data || []).forEach(r => { state.sales[r.food_id] = Number(r.sold) || 0; state.foodStats[r.food_id] = { orders: Number(r.orders_cnt) || 0, avg: Number(r.avg_stars) || 0, cnt: Number(r.rating_cnt) || 0 }; });
@@ -1496,17 +1776,12 @@
     }
 
     // ===== TAB TÀI KHOẢN: XEM / CHỈNH SỬA =====
-    const accEditing = () => !state.user || (state.accEditing === undefined ? !(state.profile.name && state.profile.phone) : state.accEditing);
+    const accEditing = () => (state.accEditing === undefined ? !(state.profile.name && state.profile.phone) : state.accEditing);
     function startAccEdit() { state.accBackup = { ...state.profile }; state.accEditing = true; render(); }
     function cancelAccEdit() {
       if (state.accBackup) state.profile = { ...state.profile, name: state.accBackup.name, phone: state.accBackup.phone, address: state.accBackup.address };
       state.accEditing = false; render();
     }
-    function accViewHtml() {
-      const p = state.profile, row = (i, l, v) => `<div class="flex gap-2 text-[13px]"><span>${i}</span><div><b class="text-gray-700">${l}</b><p class="text-gray-600 whitespace-pre-line">${v || 'Chưa có'}</p></div></div>`;
-      return `<div class="space-y-3">${row('👤', 'Họ và tên', p.name)}${row('📞', 'Số điện thoại / Zalo', p.phone)}${row('📍', 'Địa chỉ giao hàng', p.address)}<p class="text-[13px] text-gray-400">Thông tin được lưu theo tài khoản và tự điền khi bạn đặt món.</p><button onclick="startAccEdit()" class="w-full border border-emerald-700 text-emerald-800 py-3 rounded-xl text-[13px] font-extrabold">✏️ Chỉnh sửa thông tin</button></div>`;
-    }
-
     // ===== PHÍ DÙNG APP: LỜI DỄ HIỂU + THANH TIẾN ĐỘ =====
     function feeProgressHtml(n) {
       const cap = [30, 100, 200, 400].find(x => n <= x), fee = feeFor(n);
@@ -2434,7 +2709,7 @@
     function reorderOldOrder(orderId) {
       const order = state.orders.find(o => o.id === orderId);
       if (!order) return;
-      order.items.forEach(i => { const k = i.cartKey || i.foodId, e = state.cart.find(x => x.cartKey === k); if (e) e.quantity += i.quantity; else state.cart.push({ ...i, cartKey: k }); }); saveState(); state.showCart = true; render();
+      order.items.forEach(i => { const k = i.cartKey || i.foodId, e = state.cart.find(x => x.cartKey === k); if (e) e.quantity += i.quantity; else state.cart.push({ ...i, cartKey: k, image: (state.foods.find(f => f.id === i.foodId) || {}).image || '' }); }); saveState(); state.showCart = true; render();
     }
 
     async function placeOrder() {
@@ -2455,7 +2730,7 @@
         const o = {
           id: gmode ? (state.gIds[g.storeId] = state.gIds[g.storeId] || 'SF-' + Math.random().toString(36).slice(2, 7).toUpperCase()) : 'SF-' + Math.random().toString(36).slice(2, 7).toUpperCase(),
           storeId: g.storeId, storeName: st ? st.name : g.storeName, storePhone: st ? (st.phone || '') : '',
-          items: g.items.map(i => ({ ...i })), subtotal: g.subtotal, shippingFee: ship, total: g.subtotal + ship,
+          items: g.items.map(({ image, ...i }) => i), subtotal: g.subtotal, shippingFee: ship, total: g.subtotal + ship,
           fulfillmentMethod: state.fulfillmentMethod, pickupTime: state.fulfillmentMethod === 'PICKUP' ? state.pickupTime : null,
           status: 'PENDING_CONFIRMATION', customerName: name, customerPhone: phone, deliveryAddress: address, customerNote: (gnote + state.checkoutNote.trim()).trim(),
           createdAt: now, unsynced: !!supabaseClient, customerId: state.user ? state.user.id : null, consent: state.checkoutConsent,
@@ -2770,28 +3045,8 @@
       // TAB 4: TÀI KHOẢN
       if (state.activeTab === 'admin' && state.isAdmin) html += adminHtml();
 
-      if (state.activeTab === 'profile') {
-        html += `
-          <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-            <h2 class="font-extrabold text-base text-gray-900">📍 Thông tin nhận hàng</h2>
-            ${accEditing() ? `<label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Họ và tên</span><input value="${state.profile.name}" oninput="state.profile.name=this.value;" class="field" placeholder="Nhập họ và tên" /></label>
-            <label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Số điện thoại / Zalo</span><input value="${state.profile.phone}" oninput="state.profile.phone=this.value;" class="field" placeholder="09xxxxxxxx" inputmode="tel" /></label>
-            <label class="block space-y-1"><span class="text-[13px] font-bold text-gray-700">Địa chỉ giao hàng</span><textarea oninput="state.profile.address=this.value;" class="field min-h-16" placeholder="Thôn, Xóm, Số nhà...">${state.profile.address || ''}</textarea></label>
-            <button onclick="saveProfile()" class="w-full bg-emerald-700 text-white py-3 rounded-xl text-[13px] font-extrabold">Lưu thông tin</button>
-            ${state.user && state.profile.name && state.profile.phone ? '<button onclick="cancelAccEdit()" class="w-full border py-3 rounded-xl text-[13px] font-bold text-gray-600">Hủy</button>' : ''}` : accViewHtml()}
-          </div>
-          <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-            <h2 class="font-extrabold text-base text-gray-900">⭐ Tài khoản và hạng hội viên</h2>
-            ${hasAccount() ? `<p class="text-[13px] text-gray-500">${accLoginLabel()}</p>` : '<p class="text-[13px] text-amber-700 font-bold">Bạn đang đặt món không cần tài khoản. Tạo tài khoản bằng số điện thoại để lưu thông tin, lịch sử đơn và tích điểm.</p>'}
-            ${hasAccount() ? `<div class="bg-emerald-50 rounded-xl p-3 text-[13px]"><b class="text-emerald-800">⭐ ${myPoints()} điểm · ${tierOf(myPoints())}</b><p class="text-gray-500 mt-1">1 điểm cho mỗi 1.000đ đơn hoàn tất. Bạc từ 100 điểm, Vàng từ 300.</p></div><button onclick="supabaseClient.auth.signOut(); showToast('Đã đăng xuất.');" class="w-full border py-3 rounded-xl text-[13px] font-bold text-rose-600">Đăng xuất</button>` : '<button onclick="state.showAuth=true; render();" class="w-full bg-amber-400 text-emerald-950 py-3 rounded-xl text-[13px] font-extrabold">Đăng nhập / Tạo tài khoản</button>'}
-          </div>
-          <div class="bg-white rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
-            <h2 class="font-extrabold text-base text-gray-900">🧰 Tiện ích và hỗ trợ</h2>
-            ${installCardHtml()}
-            ${supportCardHtml()}
-          </div>
-        `;
-      }
+      if (state.activeTab === 'profile' && state.isAdmin) html += adminAccountHtml();
+      else if (state.activeTab === 'profile') html += customerAccountHtml();
 
       html += `</main>`;
 
@@ -2879,6 +3134,7 @@
 
       if (state.groupQR && state.groupId) html += groupQrHtml();
       if (state.copyMenu) html += copyMenuHtml();
+      if (state.counter) html += counterHtml();
       if (state.groupAsk) html += groupAskHtml();
 
       // CREATE STORE MODAL
@@ -2978,6 +3234,7 @@
 
     render();
     loadCloudData();
+    loadPromos().then(() => render()); imgCacheApply();
     setupRealtimeSync(); setupTableRealtime(); applyHash(); window.addEventListener('hashchange', applyHash); registerSW();
     const tempGone = groupTempCheck();
     if (state.groupId && !/nhom=/.test(location.hash) && !tempGone) loadGroup();
